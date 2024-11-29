@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from flask import Flask
 from gunicorn.app.base import BaseApplication
 import threading
+import asyncio
 import tensorflow as tf
 from tensorflow.keras import layers, models
 import json
@@ -94,76 +95,19 @@ def fetch_crypto_data_coingecko(crypto_id, retries=3):
             if attempt < retries - 1:
                 time.sleep(5)  # Attendre avant de réessayer
             else:
-                bot.send_message(chat_id=CHAT_ID, text=f"Erreur lors de la récupération des données pour {crypto_id}.")
-    return None
-
-# Fonction pour récupérer les données de Binance
-def fetch_crypto_data_binance(crypto_id, retries=3):
-    url = f"https://api.binance.com/api/v3/klines"
-    params = {"symbol": f"{crypto_id}USDT", "interval": "1m", "limit": 1000}
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            prices = [float(item[4]) for item in data]  # Close prices
-            return np.array(prices)
-        except requests.exceptions.RequestException as err:
-            print(f"Erreur pour {crypto_id} via Binance: {err}")
-            if attempt < retries - 1:
-                time.sleep(5)
-            else:
-                bot.send_message(chat_id=CHAT_ID, text=f"Erreur lors de la récupération des données pour {crypto_id} sur Binance.")
-    return None
-
-# Fonction pour récupérer les données de Kraken
-def fetch_crypto_data_kraken(crypto_id, retries=3):
-    url = f"https://api.kraken.com/0/public/OHLC"
-    params = {"pair": f"{crypto_id}USD", "interval": 1, "since": int(time.time() - 86400)}
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            prices = [float(item[4]) for item in data['result'][f"{crypto_id}USD"]]
-            return np.array(prices)
-        except requests.exceptions.RequestException as err:
-            print(f"Erreur pour {crypto_id} via Kraken: {err}")
-            if attempt < retries - 1:
-                time.sleep(5)
-            else:
-                bot.send_message(chat_id=CHAT_ID, text=f"Erreur lors de la récupération des données pour {crypto_id} sur Kraken.")
-    return None
-
-# Fonction pour récupérer les données de KuCoin
-def fetch_crypto_data_kucoin(crypto_id, retries=3):
-    url = f"https://api.kucoin.com/api/v1/market/candles"
-    params = {"symbol": f"{crypto_id}-USDT", "type": "1min", "limit": 1000}
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()
-            data = response.json()
-            prices = [float(item[4]) for item in data['data']]  # Close prices
-            return np.array(prices)
-        except requests.exceptions.RequestException as err:
-            print(f"Erreur pour {crypto_id} via KuCoin: {err}")
-            if attempt < retries - 1:
-                time.sleep(5)
-            else:
-                bot.send_message(chat_id=CHAT_ID, text=f"Erreur lors de la récupération des données pour {crypto_id} sur KuCoin.")
+                asyncio.run(bot.send_message(chat_id=CHAT_ID, text=f"Erreur lors de la récupération des données pour {crypto_id}."))
     return None
 
 # Fonction pour vérifier l'état du bot et envoyer une notification
-def monitor_bot_status():
+async def monitor_bot_status():
     try:
         # Tester l'envoi d'un message
-        bot.send_message(chat_id=CHAT_ID, text="Le bot fonctionne correctement")
+        await bot.send_message(chat_id=CHAT_ID, text="Le bot fonctionne correctement")
     except Exception as e:
-        bot.send_message(chat_id=CHAT_ID, text=f"Erreur dans le bot: {str(e)}")
+        await bot.send_message(chat_id=CHAT_ID, text=f"Erreur dans le bot: {str(e)}")
         raise  # Propager l'exception pour plus de visibilité
 
-# Fonction de gestion de l'équilibre des positions
+# Fonction pour gérer l'équilibre des positions
 def balance_positions(current_position, capital):
     if current_position > capital * MAX_POSITION_PERCENTAGE:
         return capital * MAX_POSITION_PERCENTAGE  # Limiter la position
@@ -227,8 +171,8 @@ def trading_loop():
 def run_flask_app():
     app.run(host="0.0.0.0", port=PORT)
 
-# Thread pour le monitoring du bot
-monitor_thread = threading.Thread(target=monitor_bot_status)
+# Lancer le monitoring du bot dans un thread
+monitor_thread = threading.Thread(target=lambda: asyncio.run(monitor_bot_status()))
 monitor_thread.start()
 
 # Lancer Flask dans un thread séparé
