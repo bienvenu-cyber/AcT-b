@@ -86,7 +86,13 @@ def fetch_economic_data_alpha_vantage():
 # Fonction pour récupérer les données de l'API CoinGecko
 def fetch_crypto_data_coingecko(crypto_id, retries=3):
     url = f"https://api.coingecko.com/api/v3/coins/{crypto_id}/market_chart"
-    params = {"vs_currency": "usd", "days": "1", "interval": "minute"}
+    params = {
+        "vs_currency": "usd", 
+        "days": "1", 
+        "interval": "minute",
+        "x_cg_demo_api_key": "CG-bot2JL3PvcpDM8bFWUF5wmNHZ8A"  # Ajout de votre clé API ici
+    }
+    
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=10)
@@ -197,51 +203,29 @@ def train_ml_model(prices):
     
     # Normalisation des données
     scaler = StandardScaler()
-    features = scaler.fit_transform(features.reshape(-1, 20))
+    features = scaler.fit_transform(features.reshape(-1, 1)).reshape(features.shape)
     
-    # Split des données en entrainement et test
+    # Division des données en ensemble d'entraînement et de test
     X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
     
     # Création et entraînement du modèle
-    model = create_neural_network(input_shape=(X_train.shape[1],))
-    model.fit(X_train, y_train, epochs=5, batch_size=32)
-    
-    # Evaluation du modèle
-    score = model.evaluate(X_test, y_test, verbose=0)
-    print(f"Précision du modèle : {score[1]*100}%")
-    
+    model = create_neural_network((X_train.shape[1],))
+    model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test))
     return model
 
-# Fonction principale pour récupérer les données et entraîner le modèle
-def main():
-    # Récupération des données de l'API Alpha Vantage
-    economic_data = fetch_economic_data_alpha_vantage()
-    if economic_data:
-        print("Données économiques récupérées avec succès.")
-    else:
-        print("Échec de la récupération des données économiques.")
-    
-    # Récupérer les données des cryptomonnaies
-    with ThreadPoolExecutor() as executor:
-        crypto_data = {crypto: executor.submit(fetch_crypto_data_coingecko, crypto) for crypto in CRYPTO_LIST}
-    
-    for crypto, future in crypto_data.items():
-        prices = future.result()
-        if prices is not None:
-            print(f"Données pour {crypto} récupérées avec succès.")
-            # Entraîner le modèle avec les données récupérées
-            model = train_ml_model(prices)
-        else:
-            print(f"Échec de la récupération des données pour {crypto}.")
+# Fonction pour effectuer des prédictions avec le modèle entraîné
+def predict_price_movement(model, recent_prices):
+    prediction = model.predict(np.array(recent_prices).reshape(1, -1))
+    return prediction[0][0]  # Retourner la probabilité de "1" (hausse du prix)
 
-# Lancer l'application Flask dans un thread séparé pour éviter de bloquer le script
-def start_flask_app():
-    app.run(host="0.0.0.0", port=PORT)
+# Lancer Flask
+class FlaskApp(BaseApplication):
+    def __init__(self, app):
+        self.app = app
+        super().__init__()
 
-# Démarrer l'application Flask et la surveillance du bot
+    def load(self):
+        return self.app
+
 if __name__ == "__main__":
-    threading.Thread(target=start_flask_app).start()
-    monitor_bot_status()  # Vérifier si le bot fonctionne
-
-    # Exécuter la fonction principale pour récupérer les données
-    main()
+    app.run(debug=True, host='0.0.0.0', port=PORT)
