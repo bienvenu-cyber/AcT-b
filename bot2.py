@@ -90,7 +90,7 @@ def fetch_crypto_data_coingecko(crypto_id, retries=3):
         "vs_currency": "usd", 
         "days": "1", 
         "interval": "minute",
-        "x_cg_demo_api_key": "CG-bot2JL3PvcpDM8bFWUF5wmNHZ8A"  # Ajout de votre clé API ici
+        "x_cg_demo_api_key": "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # Ajout de votre clé API ici
     }
     
     for attempt in range(retries):
