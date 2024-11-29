@@ -154,7 +154,7 @@ def predict_signal(model, data):
     return model.predict(data)
 
 # Main loop pour exécuter les opérations de trading toutes les 5 minutes
-def trading_loop():
+async def trading_loop():
     while True:
         # Fetch des données crypto
         crypto_data = fetch_crypto_data_coingecko("bitcoin")
@@ -165,7 +165,7 @@ def trading_loop():
             signal = predict_signal(model, crypto_data[-20:])
             print("Signal de trading:", signal)
         
-        time.sleep(300)  # Attendre 5 minutes avant le prochain trade
+        await asyncio.sleep(300)  # Attendre 5 minutes avant le prochain trade
 
 # Lancer le serveur Flask
 def run_flask_app():
@@ -180,4 +180,4 @@ flask_thread = threading.Thread(target=run_flask_app)
 flask_thread.start()
 
 # Démarrer le bot de trading dans la boucle
-trading_loop()
+asyncio.run(trading_loop())
