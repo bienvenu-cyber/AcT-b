@@ -18,7 +18,7 @@ import json
 # Variables d'environnement
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-PORT = int(os.getenv("PORT", 8000))  # Port par défaut 8000 si non défini
+PORT = int(os.getenv("PORT", 8001))  # Port par défaut 8001 si non défini
 
 # Vérification des variables d'environnement
 if not TELEGRAM_TOKEN or not CHAT_ID:
@@ -83,9 +83,14 @@ def fetch_economic_data_trading_economics():
 def fetch_crypto_data_coingecko(crypto_id, retries=3):
     url = f"https://api.coingecko.com/api/v3/coins/{crypto_id}/market_chart"
     params = {"vs_currency": "usd", "days": "1", "interval": "minute"}
+    
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=10)
+            if response.status_code == 429:  # Trop de requêtes
+                print(f"Trop de requêtes. Pause avant nouvelle tentative.")
+                time.sleep(60)  # Attente pour éviter le blocage
+                continue
             response.raise_for_status()
             data = response.json()
             prices = [item[1] for item in data["prices"]]
@@ -93,9 +98,10 @@ def fetch_crypto_data_coingecko(crypto_id, retries=3):
         except requests.exceptions.RequestException as err:
             print(f"Erreur pour {crypto_id} via CoinGecko: {err}")
             if attempt < retries - 1:
-                time.sleep(5)  # Attendre avant de réessayer
+                time.sleep(60)  # Pause avant de réessayer
             else:
-                asyncio.run(bot.send_message(chat_id=CHAT_ID, text=f"Erreur lors de la récupération des données pour {crypto_id}."))
+     await bot.send_message(chat_id=CHAT_ID, text=f"Erreur pour {crypto_id}.")
+                , text=f"Erreur lors de la récupération des données pour {crypto_id}."))
     return None
 
 # Fonction pour vérifier l'état du bot et envoyer une notification
