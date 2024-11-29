@@ -12,6 +12,7 @@ from gunicorn.app.base import BaseApplication
 import threading
 import tensorflow as tf
 from tensorflow.keras import layers, models
+import json
 
 # Variables d'environnement
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -34,6 +35,48 @@ MAX_POSITION_PERCENTAGE = 0.1  # Investir un maximum de 10% du capital par posit
 
 # Initialisation de l'application Flask
 app = Flask(__name__)
+
+# Fichier de cache pour les données économiques
+CACHE_FILE = "trading_economics_cache.json"
+CALL_LIMIT = 50  # Limite des appels API par jour
+calls_today = 0  # Compteur des appels API
+
+# Fonction pour récupérer les données économiques via Trading Economics avec cache
+def fetch_economic_data_trading_economics():
+    global calls_today
+    
+    # Vérifier si le cache existe et est encore valide
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, 'r') as f:
+            cache = json.load(f)
+        
+        # Vérifier si les données sont encore valides (cache expiré après 24 heures)
+        if time.time() - cache.get('timestamp', 0) < 86400:
+            print("Utilisation des données en cache.")
+            return cache.get('data', None)
+    
+    # Si le cache est expiré ou inexistant, faire un appel à l'API
+    if calls_today >= CALL_LIMIT:
+        print("Limite d'appels API atteinte pour la journée.")
+        return None  # Retourner None si la limite d'appels est atteinte
+    
+    url = "https://api.tradingeconomics.com/economic-calendar"
+    params = {"c": "your_api_key_here", "country": "US"}  # Exemple pour les États-Unis
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Mettre à jour le cache avec les nouvelles données
+        with open(CACHE_FILE, 'w') as f:
+            json.dump({"timestamp": time.time(), "data": data}, f)
+        
+        calls_today += 1  # Incrémenter le compteur d'appels
+        
+        return data
+    except requests.exceptions.RequestException as err:
+        print(f"Erreur dans la récupération des données économiques: {err}")
+        return None
 
 # Fonction pour récupérer les données de l'API CoinGecko
 def fetch_crypto_data_coingecko(crypto_id, retries=3):
@@ -111,33 +154,6 @@ def fetch_crypto_data_kucoin(crypto_id, retries=3):
                 bot.send_message(chat_id=CHAT_ID, text=f"Erreur lors de la récupération des données pour {crypto_id} sur KuCoin.")
     return None
 
-# Fonction pour récupérer des données financières via Yahoo Finance
-def fetch_financial_data_yahoo(symbol):
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-    params = {"range": "1d", "interval": "1m"}
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        prices = [item[1] for item in data['chart']['result'][0]['indicators']['quote'][0]['close']]
-        return np.array(prices)
-    except requests.exceptions.RequestException as err:
-        print(f"Erreur pour {symbol} via Yahoo Finance: {err}")
-        return None
-
-# Fonction pour récupérer des données économiques via Trading Economics
-def fetch_economic_data_trading_economics():
-    url = f"https://api.tradingeconomics.com/economic-calendar"
-    params = {"c": "your_api_key_here", "country": "US"}  # Exemple pour les États-Unis
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json()
-        return data
-    except requests.exceptions.RequestException as err:
-        print(f"Erreur dans la récupération des données économiques: {err}")
-        return None
-
 # Fonction pour vérifier l'état du bot et envoyer une notification
 def monitor_bot_status():
     try:
@@ -189,33 +205,35 @@ def train_ml_model(prices):
     
     return model
 
-# Fonction pour analyser les signaux avec un modèle ML
-def analyze_signals(prices, model):
-    sma_short = prices[-10:].mean()
-    sma_long = prices[-20:].mean()
-    ema_short = prices[-12:].mean()
-    ema_long = prices[-26:].mean()
-    macd = ema_short - ema_long
-    atr = prices[-20:].std()
-    upper_band = sma_short + (2 * atr)
-    lower_band = sma_short - (2 * atr)
-    
-    if prices[-1] > upper_band:
-        return "SELL"
-    elif prices[-1] < lower_band:
-        return "BUY"
-    else:
-        return "HOLD"
+# Fonction pour prédire les signaux de trading
+def predict_signal(model, data):
+    return model.predict(data)
 
-# Thread pour lancer l'application Flask et la surveillance du bot simultanément
+# Main loop pour exécuter les opérations de trading toutes les 5 minutes
+def trading_loop():
+    while True:
+        # Fetch des données crypto
+        crypto_data = fetch_crypto_data_coingecko("bitcoin")
+        
+        # Entraîner et prédire le signal
+        if crypto_data is not None:
+            model = train_ml_model(crypto_data)
+            signal = predict_signal(model, crypto_data[-20:])
+            print("Signal de trading:", signal)
+        
+        time.sleep(300)  # Attendre 5 minutes avant le prochain trade
+
+# Lancer le serveur Flask
 def run_flask_app():
-    app.run(host='0.0.0.0', port=PORT)
+    app.run(host="0.0.0.0", port=PORT)
 
-def run_bot_monitoring():
-    monitor_bot_status()
+# Thread pour le monitoring du bot
+monitor_thread = threading.Thread(target=monitor_bot_status)
+monitor_thread.start()
 
-# Lance les threads pour Flask et Telegram
-if __name__ == "__main__":
-    with ThreadPoolExecutor() as executor:
-        executor.submit(run_flask_app)
-        executor.submit(run_bot_monitoring)
+# Lancer Flask dans un thread séparé
+flask_thread = threading.Thread(target=run_flask_app)
+flask_thread.start()
+
+# Démarrer le bot de trading dans la boucle
+trading_loop()
