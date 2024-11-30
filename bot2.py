@@ -79,11 +79,44 @@ def train_ml_model(prices):
     model.fit(X_train, y_train, epochs=5, batch_size=32, validation_data=(X_test, y_test))
     return model
 
+# Fonction pour envoyer un message via Telegram
+def send_telegram_message(message):
+    try:
+        bot.send_message(chat_id=CHAT_ID, text=message)
+    except Exception as e:
+        print(f"Erreur d'envoi de message Telegram: {e}")
+
+# Fonction pour envoyer un signal de trading (Achat/Vente)
+def send_trading_signal(prediction):
+    if prediction == 1:
+        message = "Signal d'achat : Le modèle prédit que le prix va augmenter."
+    else:
+        message = "Signal de vente : Le modèle prédit que le prix va diminuer."
+    
+    send_telegram_message(message)
+
 # Fonction Flask pour vérifier l'état du bot
 @app.route("/")
 def status():
     return "Bot opérationnel et serveur en cours d'exécution."
 
-# Lancer Flask
+# Fonction de surveillance des prix en continu
+def monitor_prices():
+    while True:
+        for crypto_id in CRYPTO_LIST:
+            prices = fetch_crypto_data_coingecko(crypto_id)
+            if prices is not None:
+                model = train_ml_model(prices)
+                prediction = model.predict(prices[-1].reshape(1, -1))  # Dernière valeur pour prédiction
+                send_trading_signal(int(prediction[0]))  # Envoie du message
+        time.sleep(60)  # Attendre 60 secondes avant de vérifier à nouveau
+
+# Lancer Flask et surveillance des prix en parallèle
 if __name__ == "__main__":
-    app.run(debug=False, host='0.0.0.0', port=PORT)
+    # Lancer le serveur Flask
+    from threading import Thread
+    thread = Thread(target=app.run, kwargs={'debug': False, 'host': '0.0.0.0', 'port': PORT})
+    thread.start()
+
+    # Démarre la surveillance des prix
+    monitor_prices()
