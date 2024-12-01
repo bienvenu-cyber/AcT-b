@@ -1,122 +1,153 @@
 import os
 import requests
 import numpy as np
-import json
-import time
 import pandas as pd
+import time
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from telegram import Bot
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask
 from tensorflow.keras import layers, models
 
 # Variables d'environnement
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-PORT = int(os.getenv("PORT", 8001))  # Port par défaut 8001 si non défini
-ALPHA_VANTAGE_API_KEY = os.getenv("ALPHA_VANTAGE_API_KEY")  # Clé API pour Alpha Vantage
+PORT = int(os.getenv("PORT", 8001))
 
 # Vérification des variables d'environnement
-if not TELEGRAM_TOKEN or not CHAT_ID or not ALPHA_VANTAGE_API_KEY:
-    raise ValueError("Les variables d'environnement TELEGRAM_TOKEN, CHAT_ID ou ALPHA_VANTAGE_API_KEY ne sont pas définies.")
+if not TELEGRAM_TOKEN or not CHAT_ID:
+    raise ValueError("Les variables d'environnement TELEGRAM_TOKEN ou CHAT_ID ne sont pas définies.")
 
 # Initialisation du bot Telegram
 bot = Bot(token=TELEGRAM_TOKEN)
 
+# Liste des cryptomonnaies à surveiller
+CRYPTO_LIST = ["bitcoin","cardano"]
+
+# Capital initial et gestion des positions
+MAX_POSITION_PERCENTAGE = 0.1
+CAPITAL = 10000
+
+# Journalisation
+PERFORMANCE_LOG = "trading_performance.csv"
+SIGNAL_LOG = "signal_log.csv"
+
 # Initialisation de l'application Flask
 app = Flask(__name__)
 
-# Variables globales
-CACHE_FILE = "alpha_vantage_cache.json"
-CALL_LIMIT = 50  # Limite des appels API par jour
-calls_today = 0  # Compteur des appels API
-CRYPTO_LIST = ["bitcoin", "ethereum", "cardano"]  # Liste des cryptomonnaies à surveiller
-
-# Fonction pour récupérer les données de CoinGecko
-def fetch_crypto_data_coingecko(crypto_id, retries=3):
-    url = f"https://api.coingecko.com/api/v3/coins/{crypto_id}/market_chart"
-    params = {
-        "vs_currency": "usd",
-        "days": "1",
-        "interval": "minute"
+# Fonction générique pour récupérer les données d'une API
+def fetch_crypto_data(api_name, crypto_id, retries=3):
+    api_config = {
+        "CoinGecko": {
+            "url": f"https://api.coingecko.com/api/v3/coins/{crypto_id}/market_chart",
+            "params": {"vs_currency": "usd", "days": "1", "interval": "minute"},
+            "parse": lambda data: [item[1] for item in data["prices"]]
+        },
+        "Binance": {
+            "url": f"https://api.binance.com/api/v3/klines",
+            "params": {"symbol": f"{crypto_id.upper()}USDT", "interval": "1m", "limit": 1000},
+            "parse": lambda data: [float(item[4]) for item in data]
+        }
     }
+    api = api_config.get(api_name)
+    if not api:
+        raise ValueError(f"API '{api_name}' non supportée.")
+    
     for attempt in range(retries):
         try:
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(api["url"], params=api["params"], timeout=10)
             response.raise_for_status()
             data = response.json()
-            prices = [item[1] for item in data["prices"]]
-            return np.array(prices)
+            return np.array(api["parse"](data))
         except requests.exceptions.RequestException as err:
-            print(f"Erreur pour {crypto_id} via CoinGecko : {err}")
-            time.sleep(5) if attempt < retries - 1 else None
+            print(f"Erreur {api_name} pour {crypto_id}: {err}")
+            if attempt < retries - 1:
+                time.sleep(5)
+            else:
+                bot.send_message(chat_id=CHAT_ID, text=f"Erreur {api_name} pour {crypto_id}.")
     return None
 
-# Fonction pour créer un réseau de neurones
-def create_neural_network(input_shape):
-    model = models.Sequential([
-        layers.Dense(64, activation='relu', input_shape=input_shape),
-        layers.Dense(64, activation='relu'),
-        layers.Dense(1, activation='sigmoid')  # Classification binaire (Achat/Vente)
-    ])
-    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    return model
+# Fonction pour calculer les indicateurs techniques
+def calculate_indicators(prices):
+    sma_short = prices[-10:].mean()
+    sma_long = prices[-20:].mean()
+    ema_short = prices[-12:].mean()
+    ema_long = prices[-26:].mean()
+    macd = ema_short - ema_long
+    atr = prices[-20:].std()
+    upper_band = sma_short + (2 * atr)
+    lower_band = sma_short - (2 * atr)
+    return {
+        "SMA_short": sma_short,
+        "SMA_long": sma_long,
+        "MACD": macd,
+        "ATR": atr,
+        "Upper_Band": upper_band,
+        "Lower_Band": lower_band
+    }
 
-# Fonction d'entraînement du modèle
-def train_ml_model(prices):
-    features, target = [], []
-    for i in range(20, len(prices)):
-        features.append(prices[i-20:i])
-        target.append(1 if prices[i] > prices[i-1] else 0)  # Achat si prix monte
-    features, target = np.array(features), np.array(target)
-
-    scaler = StandardScaler()
-    features = scaler.fit_transform(features.reshape(-1, 1)).reshape(features.shape)
-
-    X_train, X_test, y_train, y_test = train_test_split(features, target, test_size=0.2, random_state=42)
-
-    model = create_neural_network((X_train.shape[1],))
-    model.fit(X_train, y_train, epochs=5, batch_size=32, validation_data=(X_test, y_test))
-    return model
-
-# Fonction pour envoyer un message via Telegram
-def send_telegram_message(message):
-    try:
-        bot.send_message(chat_id=CHAT_ID, text=message)
-    except Exception as e:
-        print(f"Erreur d'envoi de message Telegram: {e}")
-
-# Fonction pour envoyer un signal de trading (Achat/Vente)
-def send_trading_signal(prediction):
-    if prediction == 1:
-        message = "Signal d'achat : Le modèle prédit que le prix va augmenter."
+# Fonction pour analyser les signaux
+def analyze_signals(prices):
+    indicators = calculate_indicators(prices)
+    if prices[-1] > indicators["Upper_Band"]:
+        return "SELL", indicators
+    elif prices[-1] < indicators["Lower_Band"]:
+        return "BUY", indicators
     else:
-        message = "Signal de vente : Le modèle prédit que le prix va diminuer."
-    
-    send_telegram_message(message)
+        return "HOLD", indicators
 
-# Fonction Flask pour vérifier l'état du bot
+# Fonction de gestion des positions
+def manage_position(signal, current_position, capital):
+    position_size = capital * MAX_POSITION_PERCENTAGE
+    if signal == "BUY" and current_position < position_size:
+        return position_size
+    elif signal == "SELL" and current_position > 0:
+        return 0
+    return current_position
+
+# Fonction de journalisation des signaux
+def log_signal(signal, indicators, prices):
+    df = pd.DataFrame([{
+        "Signal": signal,
+        "Price": prices[-1],
+        "SMA_short": indicators["SMA_short"],
+        "SMA_long": indicators["SMA_long"],
+        "MACD": indicators["MACD"],
+        "ATR": indicators["ATR"],
+        "Time": time.strftime("%Y-%m-%d %H:%M:%S")
+    }])
+    if not os.path.exists(SIGNAL_LOG):
+        df.to_csv(SIGNAL_LOG, index=False)
+    else:
+        df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
+
+# Fonction principale pour chaque crypto
+def run_trading_bot(crypto_id):
+    print(f"Analyse de {crypto_id}")
+    prices = fetch_crypto_data("CoinGecko", crypto_id)
+    if prices is None or len(prices) < 20:
+        print(f"Données insuffisantes pour {crypto_id}")
+        return
+    signal, indicators = analyze_signals(prices)
+    current_position = manage_position(signal, 0, CAPITAL)
+    log_signal(signal, indicators, prices)
+    bot.send_message(chat_id=CHAT_ID, text=f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
+
+# Application Flask
 @app.route("/")
-def status():
-    return "Bot opérationnel et serveur en cours d'exécution."
+def home():
+    return "Bot de trading opérationnel."
 
-# Fonction de surveillance des prix en continu
-def monitor_prices():
+# Fonction pour exécuter le bot de manière répétée
+def start_bot():
     while True:
-        for crypto_id in CRYPTO_LIST:
-            prices = fetch_crypto_data_coingecko(crypto_id)
-            if prices is not None:
-                model = train_ml_model(prices)
-                prediction = model.predict(prices[-1].reshape(1, -1))  # Dernière valeur pour prédiction
-                send_trading_signal(int(prediction[0]))  # Envoie du message
-        time.sleep(60)  # Attendre 60 secondes avant de vérifier à nouveau
+        for crypto in CRYPTO_LIST:
+            run_trading_bot(crypto)
+        time.sleep(60)  # Intervalle d'analyse (1 minute)
 
-# Lancer Flask et surveillance des prix en parallèle
+# Exécution
 if __name__ == "__main__":
-    # Lancer le serveur Flask
-    from threading import Thread
-    thread = Thread(target=app.run, kwargs={'debug': False, 'host': '0.0.0.0', 'port': PORT})
-    thread.start()
-
-    # Démarre la surveillance des prix
-    monitor_prices()
+    with ThreadPoolExecutor() as executor:
+        executor.submit(start_bot)
+        executor.submit(app.run, host="0.0.0.0", port=PORT)
