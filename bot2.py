@@ -1,3 +1,4 @@
+import tracemalloc
 import os
 import requests
 import numpy as np
