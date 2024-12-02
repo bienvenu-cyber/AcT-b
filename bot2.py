@@ -33,7 +33,11 @@ FILE_LOCK = Lock()  # Verrou pour les accès aux fichiers
 # Fonction pour récupérer les données d'une API
 def fetch_crypto_data(crypto_id, retries=3):
     url = f"https://api.coingecko.com/api/v3/coins/{crypto_id}/market_chart"
-    params = {"vs_currency": "usd", "days": "1", "interval": "minute"}
+params = {
+    "vs_currency": "usd", 
+    "days": "1", 
+    "interval": "minute",
+    "x_cg_demo_api_key": "CG-JL3PvcpDM8bFWUF5wmNHZ8A"  # Ajouter ta clé API ici
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=10)
