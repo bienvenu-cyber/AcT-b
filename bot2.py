@@ -116,7 +116,7 @@ def trading_task():
         for crypto in CRYPTO_LIST:
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Analyse de {crypto}...")
             analyze_crypto(crypto)
-        time.sleep(300)  # Intervalle de 5 minutes
+        time.sleep(900)  # Intervalle de 15 minutes
 
 # Route Flask
 @app.route("/")
