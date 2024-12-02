@@ -37,9 +37,7 @@ params = {
     "vs_currency": "usd", 
     "days": "1", 
     "interval": "minute",
-    "x_cg_demo_api_key": "CG-
-params = {
-    "x_cg_demo_api_key": "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # Assure-toi que la clé API est bien fermée.
+    "x_cg_demo_api_key": "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # Clé API correctement fermée
 }
     for attempt in range(retries):
         try:
