@@ -66,10 +66,18 @@ def fetch_crypto_data(api_name, crypto_id, retries=3):
             if attempt < retries - 1:
                 time.sleep(5)
             else:
-                bot.send_message(chat_id=CHAT_ID, text=f"Erreur {api_name} pour {crypto_id}.")
-    return None
+ 
+import asyncio  # Ensure asyncio is imported
 
-# Fonction pour calculer les indicateurs techniques
+# Updated function for sending a message
+async def send_async_telegram_message(chat_id, message):
+    try:
+        # Ensure this is your async bot instance
+        await bot.send_message(chat_id=chat_id, text=message)
+    except Exception as e:
+        logger.error(f"Failed to send async message: {e}")
+
+# Replace all calls to `bot.send_message` with `await send_async_telegram_message`# Fonction pour calculer les indicateurs techniques
 def calculate_indicators(prices):
     sma_short = prices[-10:].mean()
     sma_long = prices[-20:].mean()
