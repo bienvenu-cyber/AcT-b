@@ -38,7 +38,9 @@ params = {
     "days": "1", 
     "interval": "minute",
     "x_cg_demo_api_key": "CG-
-JL3PvcpDM8bFWUF5wmNHZ8iA "  # Ajouter ta clé API ici}
+params = {
+    "x_cg_demo_api_key": "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # Assure-toi que la clé API est bien fermée.
+}
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=10)
