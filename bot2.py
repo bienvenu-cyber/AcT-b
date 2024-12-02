@@ -10,6 +10,7 @@ from telegram import Bot
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask
 from tensorflow.keras import layers, models
+import asyncio  # Import pour gérer les fonctions asynchrones
 
 # Variables d'environnement
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -24,7 +25,7 @@ if not TELEGRAM_TOKEN or not CHAT_ID:
 bot = Bot(token=TELEGRAM_TOKEN)
 
 # Liste des cryptomonnaies à surveiller
-CRYPTO_LIST = ["bitcoin","cardano"]
+CRYPTO_LIST = ["bitcoin", "cardano"]
 
 # Capital initial et gestion des positions
 MAX_POSITION_PERCENTAGE = 0.1
@@ -66,18 +67,17 @@ def fetch_crypto_data(api_name, crypto_id, retries=3):
             if attempt < retries - 1:
                 time.sleep(5)
             else:
- 
-import asyncio  # Ensure asyncio is imported
+                print(f"Échec après {retries} tentatives.")
+                return None
 
-# Updated function for sending a message
+# Fonction pour envoyer un message Telegram de manière asynchrone
 async def send_async_telegram_message(chat_id, message):
     try:
-        # Ensure this is your async bot instance
         await bot.send_message(chat_id=chat_id, text=message)
     except Exception as e:
-        logger.error(f"Failed to send async message: {e}")
+        print(f"Erreur lors de l'envoi du message Telegram : {e}")
 
-# Replace all calls to `bot.send_message` with `await send_async_telegram_message`# Fonction pour calculer les indicateurs techniques
+# Fonction pour calculer les indicateurs techniques
 def calculate_indicators(prices):
     sma_short = prices[-10:].mean()
     sma_long = prices[-20:].mean()
@@ -132,31 +132,29 @@ def log_signal(signal, indicators, prices):
         df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
 
 # Fonction principale pour chaque crypto
-def run_trading_bot(crypto_id):
+async def run_trading_bot(crypto_id):
     print(f"Analyse de {crypto_id}")
     prices = fetch_crypto_data("CoinGecko", crypto_id)
     if prices is None or len(prices) < 20:
         print(f"Données insuffisantes pour {crypto_id}")
         return
     signal, indicators = analyze_signals(prices)
-    current_position = manage_position(signal, 0, CAPITAL)
     log_signal(signal, indicators, prices)
-    bot.send_message(chat_id=CHAT_ID, text=f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
+    await send_async_telegram_message(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
 
-# Application Flask
+# Route principale de l'application Flask
 @app.route("/")
 def home():
     return "Bot de trading opérationnel."
 
-# Fonction pour exécuter le bot de manière répétée
-def start_bot():
+# Fonction pour démarrer le bot
+async def start_bot():
     while True:
         for crypto in CRYPTO_LIST:
-            run_trading_bot(crypto)
-        time.sleep(60)  # Intervalle d'analyse (1 minute)
+            await run_trading_bot(crypto)
+        await asyncio.sleep(60)  # Intervalle d'analyse (1 minute)
 
 # Exécution
 if __name__ == "__main__":
-    with ThreadPoolExecutor() as executor:
-        executor.submit(start_bot)
-        executor.submit(app.run, host="0.0.0.0", port=PORT)
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(start_bot())
