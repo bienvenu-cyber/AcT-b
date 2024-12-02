@@ -7,6 +7,7 @@ import asyncio
 from sklearn.preprocessing import StandardScaler
 from telegram import Bot
 from flask import Flask, jsonify
+from threading import Lock
 
 # Variables d'environnement
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -27,6 +28,7 @@ MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 10000
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
+FILE_LOCK = Lock()  # Verrou pour les accès aux fichiers
 
 # Fonction pour récupérer les données d'une API
 def fetch_crypto_data(crypto_id, retries=3):
@@ -39,7 +41,7 @@ def fetch_crypto_data(crypto_id, retries=3):
             prices = [item[1] for item in response.json()["prices"]]
             return np.array(prices)
         except requests.exceptions.RequestException as e:
-            print(f"Erreur pour {crypto_id} : {e}")
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Erreur pour {crypto_id} : {e}")
             time.sleep(5)
     return None
 
@@ -74,12 +76,12 @@ def analyze_signals(prices):
     else:
         return "HOLD", indicators
 
-# Envoi d'un message Telegram
-async def send_telegram_message(chat_id, message):
+# Envoi synchrone d'un message Telegram
+def send_telegram_message_sync(chat_id, message):
     try:
-        await bot.send_message(chat_id=chat_id, text=message)
+        bot.send_message(chat_id=chat_id, text=message)
     except Exception as e:
-        print(f"Erreur d'envoi Telegram : {e}")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Erreur d'envoi Telegram : {e}")
 
 # Journalisation des signaux
 def log_signal(signal, indicators, prices):
@@ -92,27 +94,29 @@ def log_signal(signal, indicators, prices):
         "ATR": indicators["ATR"],
         "Time": time.strftime("%Y-%m-%d %H:%M:%S"),
     }])
-    if not os.path.exists(SIGNAL_LOG):
-        df.to_csv(SIGNAL_LOG, index=False)
-    else:
-        df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
+    with FILE_LOCK:  # Empêche les conflits d'écriture
+        if not os.path.exists(SIGNAL_LOG):
+            df.to_csv(SIGNAL_LOG, index=False)
+        else:
+            df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
 
 # Fonction principale pour analyser une cryptomonnaie
-async def analyze_crypto(crypto_id):
+def analyze_crypto(crypto_id):
     prices = fetch_crypto_data(crypto_id)
     if prices is None or len(prices) < 20:
-        print(f"Données insuffisantes pour {crypto_id}.")
+        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Données insuffisantes pour {crypto_id}.")
         return
     signal, indicators = analyze_signals(prices)
     log_signal(signal, indicators, prices)
-    await send_telegram_message(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
+    send_telegram_message_sync(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
 
 # Tâche périodique pour analyser toutes les cryptos
-async def trading_task():
+def trading_task():
     while True:
-        tasks = [analyze_crypto(crypto) for crypto in CRYPTO_LIST]
-        await asyncio.gather(*tasks)
-        await asyncio.sleep(60)  # Intervalle de 60 secondes
+        for crypto in CRYPTO_LIST:
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Analyse de {crypto}...")
+            analyze_crypto(crypto)
+        time.sleep(300)  # Intervalle de 5 minutes
 
 # Route Flask
 @app.route("/")
@@ -121,6 +125,11 @@ def home():
 
 # Lancement de l'application
 if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.create_task(trading_task())
-    app.run(host="0.0.0.0", port=PORT)
+    from threading import Thread
+
+    # Exécuter la tâche de trading dans un thread séparé
+    trading_thread = Thread(target=trading_task, daemon=True)
+    trading_thread.start()
+
+    # Démarrer Flask en mode debug
+    app.run(host="0.0.0.0", port=PORT, debug=True)
