@@ -49,13 +49,6 @@ def fetch_crypto_data(crypto_id, retries=3):
             print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Erreur pour {crypto_id} : {e}")
             time.sleep(5)
     return None
-        response.raise_for_status()  # Vérifie si la requête a échoué
-        prices = [item[1] for item in response.json().get("prices", [])]  # Utilisation de `.get` pour éviter les erreurs si "prices" est absent
-        return np.array(prices)
-    except requests.exceptions.RequestException as e:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Erreur pour {params['crypto_id']} : {e}")
-        time.sleep(5)  # Attendre avant de réessayer
-return None
 
 # Calcul des indicateurs techniques
 def calculate_indicators(prices):
