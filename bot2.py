@@ -33,15 +33,22 @@ FILE_LOCK = Lock()  # Verrou pour les accès aux fichiers
 # Fonction pour récupérer les données d'une API
 def fetch_crypto_data(crypto_id, retries=3):
     url = f"https://api.coingecko.com/api/v3/coins/{crypto_id}/market_chart"
-params = {
-    "vs_currency": "usd", 
-    "days": "1", 
-    "interval": "minute",
-    "x_cg_demo_api_key": os.getenv("CG_API_KEY")  # Récupération de la clé API depuis les variables d'environnement
-}
+    params = {
+        "vs_currency": "usd", 
+        "days": "1", 
+        "interval": "minute",
+        "x_cg_demo_api_key": os.getenv("CG_API_KEY")  # Clé API
+    }
     for attempt in range(retries):
-    try:
-        response = requests.get(url, params=params, timeout=10)
+        try:
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()  # Vérifie si la requête a échoué
+            prices = [item[1] for item in response.json().get("prices", [])]
+            return np.array(prices)
+        except requests.exceptions.RequestException as e:
+            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Erreur pour {crypto_id} : {e}")
+            time.sleep(5)
+    return None
         response.raise_for_status()  # Vérifie si la requête a échoué
         prices = [item[1] for item in response.json().get("prices", [])]  # Utilisation de `.get` pour éviter les erreurs si "prices" est absent
         return np.array(prices)
