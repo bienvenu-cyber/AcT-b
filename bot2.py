@@ -37,7 +37,8 @@ params = {
     "vs_currency": "usd", 
     "days": "1", 
     "interval": "minute",
-    "x_cg_demo_api_key": "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # Clé API correctement fermée
+    "x_cg_demo_api_key": 
+    "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # La clé API doit être complète et entre guillemets.
 }
     for attempt in range(retries):
         try:
