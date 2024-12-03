@@ -4,15 +4,23 @@ import numpy as np
 import pandas as pd
 import time
 import asyncio
+import logging
 from sklearn.preprocessing import StandardScaler
 from telegram import Bot
 from flask import Flask, jsonify
 from threading import Lock
 
+# Configuration des logs
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.info("Démarrage de l'application.")
+
 # Variables d'environnement
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 PORT = int(os.getenv("PORT", 8001))
+CG_API_KEY = os.getenv("CG_API_KEY")
+
+logging.info(f"Variables récupérées : TELEGRAM_TOKEN défini : {bool(TELEGRAM_TOKEN)}, CHAT_ID : {CHAT_ID}, PORT : {PORT}")
 
 if not TELEGRAM_TOKEN or not CHAT_ID:
     raise ValueError("Les variables d'environnement TELEGRAM_TOKEN ou CHAT_ID ne sont pas définies.")
@@ -37,17 +45,18 @@ def fetch_crypto_data(crypto_id, retries=3):
         "vs_currency": "usd", 
         "days": "1", 
         "interval": "minute",
-        "x_cg_demo_api_key": os.getenv("CG_API_KEY")  # Clé API
+        "x_cg_demo_api_key": CG_API_KEY  # Clé API
     }
-    print(f"Clé API utilisée : {os.getenv('CG_API_KEY')}")
+    logging.info(f"Récupération des données pour {crypto_id} avec la clé API : {CG_API_KEY}")
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()  # Vérifie si la requête a échoué
             prices = [item[1] for item in response.json().get("prices", [])]
+            logging.info(f"Données récupérées pour {crypto_id}. Longueur des prix : {len(prices)}")
             return np.array(prices)
         except requests.exceptions.RequestException as e:
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Erreur pour {crypto_id} : {e}")
+            logging.error(f"Erreur pour {crypto_id} : {e}")
             time.sleep(5)
     return None
 
@@ -86,8 +95,9 @@ def analyze_signals(prices):
 def send_telegram_message_sync(chat_id, message):
     try:
         bot.send_message(chat_id=chat_id, text=message)
+        logging.info(f"Message Telegram envoyé : {message}")
     except Exception as e:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Erreur d'envoi Telegram : {e}")
+        logging.error(f"Erreur d'envoi Telegram : {e}")
 
 # Journalisation des signaux
 def log_signal(signal, indicators, prices):
@@ -105,22 +115,27 @@ def log_signal(signal, indicators, prices):
             df.to_csv(SIGNAL_LOG, index=False)
         else:
             df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
+    logging.info(f"Signal journalisé : {signal}")
 
 # Fonction principale pour analyser une cryptomonnaie
 def analyze_crypto(crypto_id):
-    prices = fetch_crypto_data(crypto_id)
-    if prices is None or len(prices) < 20:
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Données insuffisantes pour {crypto_id}.")
-        return
-    signal, indicators = analyze_signals(prices)
-    log_signal(signal, indicators, prices)
-    send_telegram_message_sync(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
+    try:
+        prices = fetch_crypto_data(crypto_id)
+        if prices is None or len(prices) < 20:
+            logging.warning(f"Données insuffisantes pour {crypto_id}.")
+            return
+        signal, indicators = analyze_signals(prices)
+        log_signal(signal, indicators, prices)
+        send_telegram_message_sync(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
+    except Exception as e:
+        logging.error(f"Erreur lors de l'analyse de {crypto_id} : {e}")
 
 # Tâche périodique pour analyser toutes les cryptos
 def trading_task():
+    logging.info("Démarrage de la tâche de trading.")
     while True:
         for crypto in CRYPTO_LIST:
-            print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Analyse de {crypto}...")
+            logging.info(f"Analyse de {crypto}...")
             analyze_crypto(crypto)
         time.sleep(900)  # Intervalle de 15 minutes
 
@@ -136,6 +151,7 @@ if __name__ == "__main__":
     # Exécuter la tâche de trading dans un thread séparé
     trading_thread = Thread(target=trading_task, daemon=True)
     trading_thread.start()
+    logging.info("Thread de trading démarré.")
 
     # Démarrer Flask en mode debug
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=PORT)
