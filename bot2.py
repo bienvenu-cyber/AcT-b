@@ -39,6 +39,7 @@ def fetch_crypto_data(crypto_id, retries=3):
         "interval": "minute",
         "x_cg_demo_api_key": os.getenv("CG_API_KEY")  # Clé API
     }
+    print(f"Clé API utilisée : {os.getenv('CG_API_KEY')}")
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=10)
