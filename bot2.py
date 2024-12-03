@@ -62,6 +62,7 @@ def fetch_crypto_data(crypto_id, retries=3):
 
 # Calcul des indicateurs techniques
 def calculate_indicators(prices):
+    logging.info("Calcul des indicateurs techniques...")
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
     sma_short = prices[-10:].mean()
@@ -72,6 +73,7 @@ def calculate_indicators(prices):
     atr = prices[-20:].std()
     upper_band = sma_short + (2 * atr)
     lower_band = sma_short - (2 * atr)
+    logging.info(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, MACD={macd}, ATR={atr}, Upper_Band={upper_band}, Lower_Band={lower_band}")
     return {
         "SMA_short": sma_short,
         "SMA_long": sma_long,
@@ -83,12 +85,16 @@ def calculate_indicators(prices):
 
 # Analyse des signaux
 def analyze_signals(prices):
+    logging.info("Analyse des signaux...")
     indicators = calculate_indicators(prices)
     if prices[-1] > indicators["Upper_Band"]:
+        logging.info(f"Signal SELL généré : Prix actuel ({prices[-1]}) au-dessus de la bande supérieure.")
         return "SELL", indicators
     elif prices[-1] < indicators["Lower_Band"]:
+        logging.info(f"Signal BUY généré : Prix actuel ({prices[-1]}) en dessous de la bande inférieure.")
         return "BUY", indicators
     else:
+        logging.info(f"Signal HOLD généré : Prix actuel ({prices[-1]}) dans la plage.")
         return "HOLD", indicators
 
 # Envoi synchrone d'un message Telegram
@@ -119,6 +125,7 @@ def log_signal(signal, indicators, prices):
 
 # Fonction principale pour analyser une cryptomonnaie
 def analyze_crypto(crypto_id):
+    logging.info(f"Début de l'analyse pour {crypto_id}.")
     try:
         prices = fetch_crypto_data(crypto_id)
         if prices is None or len(prices) < 20:
@@ -137,6 +144,7 @@ def trading_task():
         for crypto in CRYPTO_LIST:
             logging.info(f"Analyse de {crypto}...")
             analyze_crypto(crypto)
+        logging.info("Attente de 15 minutes avant la prochaine analyse.")
         time.sleep(900)  # Intervalle de 15 minutes
 
 # Route Flask
