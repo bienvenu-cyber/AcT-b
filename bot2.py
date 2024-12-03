@@ -162,4 +162,4 @@ if __name__ == "__main__":
     logging.info("Thread de trading démarré.")
 
     # Démarrer Flask en mode debug
-    app.run(host="0.0.0.0", port=PORT)
+  app.run(host="0.0.0.0", port=PORT, debug=True)
