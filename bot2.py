@@ -37,8 +37,7 @@ params = {
     "vs_currency": "usd", 
     "days": "1", 
     "interval": "minute",
-    "x_cg_demo_api_key": 
-    "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # La clé API doit être complète et entre guillemets.
+    "x_cg_demo_api_key": os.getenv("CG_API_KEY")  # Récupération de la clé API depuis les variables d'environnement
 }
     for attempt in range(retries):
         try:
