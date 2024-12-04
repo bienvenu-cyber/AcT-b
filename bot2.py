@@ -177,10 +177,15 @@ def home():
 if __name__ == "__main__":
     from threading import Thread
 
-    # Exécuter la tâche de trading dans un thread séparé
+    # Exécuter la tâche de maintien d'activité dans un thread séparé
+    keep_alive_thread = Thread(target=keep_instance_alive, daemon=True)
+    keep_alive_thread.start()
+    logging.info("Thread de maintien de l'instance démarré.")
+
+    # Exécuter la tâche de trading dans un autre thread séparé
     trading_thread = Thread(target=trading_task, daemon=True)
     trading_thread.start()
     logging.info("Thread de trading démarré.")
 
-    # Démarrer Flask en mode debug
+    # Démarrer Flask
     app.run(host="0.0.0.0", port=PORT, debug=True)
