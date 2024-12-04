@@ -13,7 +13,7 @@ import signal
 import sys
 
 # Configuration des logs
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 logging.info("Démarrage de l'application.")
 
@@ -51,10 +51,12 @@ def fetch_crypto_data(crypto_id, retries=3):
             prices = [item[1] for item in response.json().get("prices", [])]
             if not prices:
                 raise ValueError(f"Pas de données pour {crypto_id}.")
+            logging.debug(f"Données reçues pour {crypto_id}: {prices}")
             return np.array(prices, dtype=np.float32)
         except requests.exceptions.RequestException as e:
-            logging.warning(f"Tentative {attempt+1} échouée pour {crypto_id} : {e}")
+            logging.warning(f"Tentative {attempt + 1} échouée pour {crypto_id} : {e}")
             time.sleep(2)
+    logging.error(f"Impossible de récupérer les données pour {crypto_id} après {retries} tentatives.")
     return None
 
 # Calcul des indicateurs techniques
@@ -81,6 +83,7 @@ def calculate_indicators(prices):
 # Analyse des signaux
 def analyze_signals(prices):
     indicators = calculate_indicators(prices)
+    logging.debug(f"Indicateurs calculés : {indicators}")
     if prices[-1] > indicators["Upper_Band"]:
         return "SELL", indicators
     elif prices[-1] < indicators["Lower_Band"]:
@@ -93,7 +96,7 @@ def send_telegram_message_sync(chat_id, message):
         bot.send_message(chat_id=chat_id, text=message)
         logging.info(f"Message Telegram envoyé : {message}")
     except Exception as e:
-        logging.error(f"Erreur d'envoi Telegram : {e}")
+        logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
 
 # Journalisation des signaux
 def log_signal(signal, indicators, prices):
@@ -111,10 +114,12 @@ def log_signal(signal, indicators, prices):
             df.to_csv(SIGNAL_LOG, index=False)
         else:
             df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
+    logging.debug(f"Signal logué : {signal} à {prices[-1]}")
 
 # Fonction pour analyser une cryptomonnaie
 def analyze_crypto(crypto_id):
     try:
+        logging.debug(f"Début de l'analyse pour {crypto_id}.")
         prices = fetch_crypto_data(crypto_id)
         if prices is None or len(prices) < 20:
             logging.warning(f"Données insuffisantes pour {crypto_id}.")
@@ -128,6 +133,7 @@ def analyze_crypto(crypto_id):
 # Tâche périodique pour analyser toutes les cryptos
 def trading_task():
     while True:
+        logging.info("Début d'une nouvelle itération de trading.")
         for crypto in CRYPTO_LIST:
             executor.submit(analyze_crypto, crypto)
         time.sleep(900)
@@ -144,6 +150,13 @@ signal.signal(signal.SIGINT, handle_shutdown_signal)
 @app.route("/")
 def home():
     return jsonify({"status": "Bot de trading opérationnel."})
+
+# Test manuel
+if TELEGRAM_TOKEN and CHAT_ID:
+    try:
+        send_telegram_message_sync(CHAT_ID, "Test manuel de connexion Telegram : Bot actif.")
+    except Exception as e:
+        logging.error(f"Échec du test manuel Telegram : {e}")
 
 if __name__ == "__main__":
     logging.info("Démarrage du bot de trading.")
