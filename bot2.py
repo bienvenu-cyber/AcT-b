@@ -11,6 +11,7 @@ from flask import Flask, jsonify
 from threading import Lock
 import sys
 import signal
+from threading import Thread
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -174,9 +175,11 @@ def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
 # Lancement de l'application
-if __name__ == "__main__":
-    from threading import Thread
+def keep_instance_alive():
+    while True:
+        time.sleep(60)
 
+if __name__ == "__main__":
     # Exécuter la tâche de maintien d'activité dans un thread séparé
     keep_alive_thread = Thread(target=keep_instance_alive, daemon=True)
     keep_alive_thread.start()
