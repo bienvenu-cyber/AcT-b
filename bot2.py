@@ -9,9 +9,12 @@ from sklearn.preprocessing import StandardScaler
 from telegram import Bot
 from flask import Flask, jsonify
 from threading import Lock
+import sys
+import signal
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 logging.info("Démarrage de l'application.")
 
 # Variables d'environnement
@@ -123,7 +126,7 @@ def log_signal(signal, indicators, prices):
             df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
     logging.info(f"Signal journalisé : {signal}")
 
-# Fonction principale pour analyser une cryptomonnaie
+# Fonction pour analyser une cryptomonnaie
 def analyze_crypto(crypto_id):
     logging.info(f"Début de l'analyse pour {crypto_id}.")
     try:
@@ -147,6 +150,24 @@ def trading_task():
         logging.info("Attente de 15 minutes avant la prochaine analyse.")
         time.sleep(900)  # Intervalle de 15 minutes
 
+# Fonction qui gère les erreurs non gérées
+def log_exception(exc_type, exc_value, exc_tb):
+    logger.error("Exception non gérée : %s", exc_value)
+    logger.error("Traceback : %s", ''.join([str(line) for line in exc_tb]))
+    sys.exit(1)
+
+# Fonction qui gère les signaux d'arrêt
+def handle_shutdown_signal(signum, frame):
+    logger.info("L'application a été arrêtée (Signal: %s)", signum)
+    sys.exit(0)
+
+# Enregistrer les exceptions non gérées
+sys.excepthook = log_exception
+
+# Enregistrer les signaux de terminaison
+signal.signal(signal.SIGTERM, handle_shutdown_signal)
+signal.signal(signal.SIGINT, handle_shutdown_signal)
+
 # Route Flask
 @app.route("/")
 def home():
@@ -162,4 +183,4 @@ if __name__ == "__main__":
     logging.info("Thread de trading démarré.")
 
     # Démarrer Flask en mode debug
-app.run(host="0.0.0.0", port=PORT, debug=True)
+    app.run(host="0.0.0.0", port=PORT, debug=True)
