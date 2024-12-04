@@ -3,15 +3,14 @@ import requests
 import numpy as np
 import pandas as pd
 import time
-import asyncio
 import logging
 from sklearn.preprocessing import StandardScaler
 from telegram import Bot
 from flask import Flask, jsonify
 from threading import Lock
-import sys
+from concurrent.futures import ThreadPoolExecutor
 import signal
-from threading import Thread
+import sys
 
 # Configuration des logs
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -23,8 +22,6 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 PORT = int(os.getenv("PORT", 8001))
 CG_API_KEY = os.getenv("CG_API_KEY")
-
-logging.info(f"Variables récupérées : TELEGRAM_TOKEN défini : {bool(TELEGRAM_TOKEN)}, CHAT_ID : {CHAT_ID}, PORT : {PORT}")
 
 if not TELEGRAM_TOKEN or not CHAT_ID:
     raise ValueError("Les variables d'environnement TELEGRAM_TOKEN ou CHAT_ID ne sont pas définies.")
@@ -41,32 +38,27 @@ CAPITAL = 10000
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 FILE_LOCK = Lock()  # Verrou pour les accès aux fichiers
+executor = ThreadPoolExecutor(max_workers=4)  # Pool de threads pour optimisation
 
-# Fonction pour récupérer les données d'une API
+# Fonction pour récupérer les données de l'API
 def fetch_crypto_data(crypto_id, retries=3):
     url = f"https://api.coingecko.com/api/v3/coins/{crypto_id}/market_chart"
-    params = {
-        "vs_currency": "usd", 
-        "days": "1", 
-        "interval": "minute",
-        "x_cg_demo_api_key": CG_API_KEY  # Clé API
-    }
-    logging.info(f"Récupération des données pour {crypto_id} avec la clé API : {CG_API_KEY}")
+    params = {"vs_currency": "usd", "days": "1", "interval": "minute"}
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=10)
-            response.raise_for_status()  # Vérifie si la requête a échoué
+            response.raise_for_status()
             prices = [item[1] for item in response.json().get("prices", [])]
-            logging.info(f"Données récupérées pour {crypto_id}. Longueur des prix : {len(prices)}")
-            return np.array(prices)
+            if not prices:
+                raise ValueError(f"Pas de données pour {crypto_id}.")
+            return np.array(prices, dtype=np.float32)
         except requests.exceptions.RequestException as e:
-            logging.error(f"Erreur pour {crypto_id} : {e}")
-            time.sleep(5)
+            logging.warning(f"Tentative {attempt+1} échouée pour {crypto_id} : {e}")
+            time.sleep(2)
     return None
 
 # Calcul des indicateurs techniques
 def calculate_indicators(prices):
-    logging.info("Calcul des indicateurs techniques...")
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
     sma_short = prices[-10:].mean()
@@ -77,7 +69,6 @@ def calculate_indicators(prices):
     atr = prices[-20:].std()
     upper_band = sma_short + (2 * atr)
     lower_band = sma_short - (2 * atr)
-    logging.info(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, MACD={macd}, ATR={atr}, Upper_Band={upper_band}, Lower_Band={lower_band}")
     return {
         "SMA_short": sma_short,
         "SMA_long": sma_long,
@@ -89,17 +80,12 @@ def calculate_indicators(prices):
 
 # Analyse des signaux
 def analyze_signals(prices):
-    logging.info("Analyse des signaux...")
     indicators = calculate_indicators(prices)
     if prices[-1] > indicators["Upper_Band"]:
-        logging.info(f"Signal SELL généré : Prix actuel ({prices[-1]}) au-dessus de la bande supérieure.")
         return "SELL", indicators
     elif prices[-1] < indicators["Lower_Band"]:
-        logging.info(f"Signal BUY généré : Prix actuel ({prices[-1]}) en dessous de la bande inférieure.")
         return "BUY", indicators
-    else:
-        logging.info(f"Signal HOLD généré : Prix actuel ({prices[-1]}) dans la plage.")
-        return "HOLD", indicators
+    return "HOLD", indicators
 
 # Envoi synchrone d'un message Telegram
 def send_telegram_message_sync(chat_id, message):
@@ -120,16 +106,14 @@ def log_signal(signal, indicators, prices):
         "ATR": indicators["ATR"],
         "Time": time.strftime("%Y-%m-%d %H:%M:%S"),
     }])
-    with FILE_LOCK:  # Empêche les conflits d'écriture
+    with FILE_LOCK:
         if not os.path.exists(SIGNAL_LOG):
             df.to_csv(SIGNAL_LOG, index=False)
         else:
             df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
-    logging.info(f"Signal journalisé : {signal}")
 
 # Fonction pour analyser une cryptomonnaie
 def analyze_crypto(crypto_id):
-    logging.info(f"Début de l'analyse pour {crypto_id}.")
     try:
         prices = fetch_crypto_data(crypto_id)
         if prices is None or len(prices) < 20:
@@ -143,29 +127,16 @@ def analyze_crypto(crypto_id):
 
 # Tâche périodique pour analyser toutes les cryptos
 def trading_task():
-    logging.info("Démarrage de la tâche de trading.")
     while True:
         for crypto in CRYPTO_LIST:
-            logging.info(f"Analyse de {crypto}...")
-            analyze_crypto(crypto)
-        logging.info("Attente de 15 minutes avant la prochaine analyse.")
-        time.sleep(900)  # Intervalle de 15 minutes
+            executor.submit(analyze_crypto, crypto)
+        time.sleep(900)
 
-# Fonction qui gère les erreurs non gérées
-def log_exception(exc_type, exc_value, exc_tb):
-    logger.error("Exception non gérée : %s", exc_value)
-    logger.error("Traceback : %s", ''.join([str(line) for line in exc_tb]))
-    sys.exit(1)
-
-# Fonction qui gère les signaux d'arrêt
+# Gestion des signaux d'arrêt
 def handle_shutdown_signal(signum, frame):
-    logger.info("L'application a été arrêtée (Signal: %s)", signum)
+    logging.info("Arrêt de l'application (Signal: %s)", signum)
     sys.exit(0)
 
-# Enregistrer les exceptions non gérées
-sys.excepthook = log_exception
-
-# Enregistrer les signaux de terminaison
 signal.signal(signal.SIGTERM, handle_shutdown_signal)
 signal.signal(signal.SIGINT, handle_shutdown_signal)
 
@@ -174,21 +145,7 @@ signal.signal(signal.SIGINT, handle_shutdown_signal)
 def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
-# Lancement de l'application
-def keep_instance_alive():
-    while True:
-        time.sleep(60)
-
 if __name__ == "__main__":
-    # Exécuter la tâche de maintien d'activité dans un thread séparé
-    keep_alive_thread = Thread(target=keep_instance_alive, daemon=True)
-    keep_alive_thread.start()
-    logging.info("Thread de maintien de l'instance démarré.")
-
-    # Exécuter la tâche de trading dans un autre thread séparé
-    trading_thread = Thread(target=trading_task, daemon=True)
-    trading_thread.start()
-    logging.info("Thread de trading démarré.")
-
-    # Démarrer Flask
-    app.run(host="0.0.0.0", port=PORT, debug=True)
+    logging.info("Démarrage du bot de trading.")
+    executor.submit(trading_task)
+    app.run(host="0.0.0.0", port=PORT)
