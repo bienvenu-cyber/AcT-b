@@ -7,10 +7,15 @@ import logging
 from sklearn.preprocessing import StandardScaler
 from telegram import Bot
 from flask import Flask, jsonify
-from threading import Lock
+from threading import Lock, Thread
 from concurrent.futures import ThreadPoolExecutor
 import signal
 import sys
+import tracemalloc
+import gc  # Garbage collector pour optimiser la mémoire
+
+# Activer la surveillance de la mémoire
+tracemalloc.start()
 
 # Configuration des logs
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -38,7 +43,15 @@ CAPITAL = 10000
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 FILE_LOCK = Lock()  # Verrou pour les accès aux fichiers
-executor = ThreadPoolExecutor(max_workers=4)  # Pool de threads pour optimisation
+executor = ThreadPoolExecutor(max_workers=8)  # Pool de threads pour optimisation
+
+# Fonction pour surveiller la mémoire
+def log_memory_usage():
+    snapshot = tracemalloc.take_snapshot()
+    top_stats = snapshot.statistics("lineno")
+    logging.debug("[TOP 10 Mémoire]")
+    for stat in top_stats[:10]:
+        logging.debug(stat)
 
 # Fonction pour récupérer les données de l'API
 def fetch_crypto_data(crypto_id, retries=3):
@@ -127,6 +140,7 @@ def analyze_crypto(crypto_id):
         signal, indicators = analyze_signals(prices)
         log_signal(signal, indicators, prices)
         send_telegram_message_sync(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
+        gc.collect()  # Libérer les ressources inutilisées
     except Exception as e:
         logging.error(f"Erreur lors de l'analyse de {crypto_id} : {e}")
 
@@ -136,11 +150,14 @@ def trading_task():
         logging.info("Début d'une nouvelle itération de trading.")
         for crypto in CRYPTO_LIST:
             executor.submit(analyze_crypto, crypto)
+        log_memory_usage()  # Journaliser l'usage mémoire
         time.sleep(900)
 
 # Gestion des signaux d'arrêt
 def handle_shutdown_signal(signum, frame):
     logging.info("Arrêt de l'application (Signal: %s)", signum)
+    executor.shutdown(wait=True)  # Attendre la fin des threads
+    logging.info("Pool de threads arrêté.")
     sys.exit(0)
 
 signal.signal(signal.SIGTERM, handle_shutdown_signal)
@@ -151,6 +168,10 @@ signal.signal(signal.SIGINT, handle_shutdown_signal)
 def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
+# Lancer Flask sur un thread séparé
+def run_flask():
+    app.run(host="0.0.0.0", port=PORT)
+
 # Test manuel
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
@@ -160,5 +181,5 @@ if TELEGRAM_TOKEN and CHAT_ID:
 
 if __name__ == "__main__":
     logging.info("Démarrage du bot de trading.")
-    executor.submit(trading_task)
-    app.run(host="0.0.0.0", port=PORT)
+    Thread(target=run_flask, daemon=True).start()
+    trading_task()
