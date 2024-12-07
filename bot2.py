@@ -27,7 +27,7 @@ logging.info("Démarrage de l'application.")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 PORT = int(os.getenv("PORT", 8001))
-CG_API_KEY = os.getenv("CG_API_KEY")
+CG_API_KEY = "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # Votre clé API ici
 
 if not TELEGRAM_TOKEN or not CHAT_ID:
     raise ValueError("Les variables d'environnement TELEGRAM_TOKEN ou CHAT_ID ne sont pas définies.")
@@ -53,26 +53,31 @@ def log_memory_usage():
     for stat in top_stats[:10]:
         logging.debug(stat)
 
-# Fonction pour récupérer les données de l'API
+# Fonction pour récupérer les données de l'API avec la clé API correcte
 def fetch_crypto_data(crypto_id, retries=3):
-    url = f"https://api.coingecko.com/api/v3/coins/{crypto_id}/market_chart"
-    params = {"vs_currency": "usd", "days": "1", "interval": "minute"}
+    url = f"https://api.coingecko.com/api/v3/simple/price"  # Utiliser le bon endpoint pour obtenir le prix simple
+    params = {
+        "ids": crypto_id,
+        "vs_currencies": "usd",
+        "x_cg_demo_api_key": CG_API_KEY  # Inclure la clé API ici
+    }
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=10)
             response.raise_for_status()
-            prices = [item[1] for item in response.json().get("prices", [])]
-            if not prices:
+            data = response.json()
+            if crypto_id not in data:
                 raise ValueError(f"Pas de données pour {crypto_id}.")
-            logging.debug(f"Données reçues pour {crypto_id}: {prices}")
-            return np.array(prices, dtype=np.float32)
+            price = data[crypto_id]['usd']  # Extraire le prix en USD
+            logging.debug(f"Données reçues pour {crypto_id}: {price}")
+            return np.array([price], dtype=np.float32)  # Retourner le prix sous forme de tableau numpy
         except requests.exceptions.RequestException as e:
             logging.warning(f"Tentative {attempt + 1} échouée pour {crypto_id} : {e}")
             time.sleep(2)
     logging.error(f"Impossible de récupérer les données pour {crypto_id} après {retries} tentatives.")
     return None
 
-# Calcul des indicateurs techniques
+# Calcul des indicateurs techniques (vous devrez peut-être ajuster cela si vous ne récupérez qu'un seul prix)
 def calculate_indicators(prices):
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
