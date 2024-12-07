@@ -7,8 +7,9 @@ import logging
 from sklearn.preprocessing import StandardScaler
 from telegram import Bot
 from flask import Flask, jsonify
-from threading import Lock, Thread
+from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
+import asyncio
 import signal
 import sys
 import tracemalloc
@@ -42,7 +43,6 @@ MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 10000
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
-FILE_LOCK = Lock()  # Verrou pour les accès aux fichiers
 executor = ThreadPoolExecutor(max_workers=8)  # Pool de threads pour optimisation
 
 # Fonction pour surveiller la mémoire
@@ -103,10 +103,10 @@ def analyze_signals(prices):
         return "BUY", indicators
     return "HOLD", indicators
 
-# Envoi synchrone d'un message Telegram
-def send_telegram_message_sync(chat_id, message):
+# Envoi asynchrone d'un message Telegram
+async def send_telegram_message(chat_id, message):
     try:
-        bot.send_message(chat_id=chat_id, text=message)
+        await bot.send_message(chat_id=chat_id, text=message)
         logging.info(f"Message Telegram envoyé : {message}")
     except Exception as e:
         logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
@@ -122,15 +122,14 @@ def log_signal(signal, indicators, prices):
         "ATR": indicators["ATR"],
         "Time": time.strftime("%Y-%m-%d %H:%M:%S"),
     }])
-    with FILE_LOCK:
-        if not os.path.exists(SIGNAL_LOG):
-            df.to_csv(SIGNAL_LOG, index=False)
-        else:
-            df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
+    if not os.path.exists(SIGNAL_LOG):
+        df.to_csv(SIGNAL_LOG, index=False)
+    else:
+        df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
     logging.debug(f"Signal logué : {signal} à {prices[-1]}")
 
 # Fonction pour analyser une cryptomonnaie
-def analyze_crypto(crypto_id):
+async def analyze_crypto(crypto_id):
     try:
         logging.debug(f"Début de l'analyse pour {crypto_id}.")
         prices = fetch_crypto_data(crypto_id)
@@ -139,19 +138,19 @@ def analyze_crypto(crypto_id):
             return
         signal, indicators = analyze_signals(prices)
         log_signal(signal, indicators, prices)
-        send_telegram_message_sync(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
+        await send_telegram_message(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
         gc.collect()  # Libérer les ressources inutilisées
     except Exception as e:
         logging.error(f"Erreur lors de l'analyse de {crypto_id} : {e}")
 
 # Tâche périodique pour analyser toutes les cryptos
-def trading_task():
+async def trading_task():
     while True:
         logging.info("Début d'une nouvelle itération de trading.")
-        for crypto in CRYPTO_LIST:
-            executor.submit(analyze_crypto, crypto)
+        tasks = [analyze_crypto(crypto) for crypto in CRYPTO_LIST]
+        await asyncio.gather(*tasks)
         log_memory_usage()  # Journaliser l'usage mémoire
-        time.sleep(900)
+        await asyncio.sleep(900)
 
 # Gestion des signaux d'arrêt
 def handle_shutdown_signal(signum, frame):
@@ -175,11 +174,11 @@ def run_flask():
 # Test manuel
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
-        send_telegram_message_sync(CHAT_ID, "Test manuel de connexion Telegram : Bot actif.")
+        asyncio.run(send_telegram_message(CHAT_ID, "Test manuel de connexion Telegram : Bot actif."))
     except Exception as e:
         logging.error(f"Échec du test manuel Telegram : {e}")
 
 if __name__ == "__main__":
     logging.info("Démarrage du bot de trading.")
     Thread(target=run_flask, daemon=True).start()
-    trading_task()
+    asyncio.run(trading_task())
