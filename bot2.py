@@ -93,14 +93,22 @@ def calculate_indicators(prices):
         "Lower_Band": lower_band,
     }
 
-# Analyse des signaux
+# Analyse des signaux avec logs supplémentaires
 def analyze_signals(prices):
     indicators = calculate_indicators(prices)
     logging.debug(f"Indicateurs calculés : {indicators}")
+    
+    # Log des prix et des indicateurs avant la décision
+    logging.debug(f"Prix actuel : {prices[-1]}, Indicateurs : {indicators}")
+
     if prices[-1] > indicators["Upper_Band"]:
+        logging.info("Signal de vente généré.")
         return "SELL", indicators
     elif prices[-1] < indicators["Lower_Band"]:
+        logging.info("Signal d'achat généré.")
         return "BUY", indicators
+    
+    logging.info("Aucun signal, maintien de la position.")
     return "HOLD", indicators
 
 # Envoi asynchrone d'un message Telegram
@@ -110,6 +118,14 @@ async def send_telegram_message(chat_id, message):
         logging.info(f"Message Telegram envoyé : {message}")
     except Exception as e:
         logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
+
+# Notification d'erreur en cas d'exception
+async def notify_error(message):
+    try:
+        await bot.send_message(chat_id=CHAT_ID, text=message)
+        logging.info(f"Notification d'erreur envoyée : {message}")
+    except Exception as e:
+        logging.error(f"Erreur lors de l'envoi de la notification d'erreur : {e}")
 
 # Journalisation des signaux
 def log_signal(signal, indicators, prices):
@@ -122,34 +138,52 @@ def log_signal(signal, indicators, prices):
         "ATR": indicators["ATR"],
         "Time": time.strftime("%Y-%m-%d %H:%M:%S"),
     }])
+    
     if not os.path.exists(SIGNAL_LOG):
         df.to_csv(SIGNAL_LOG, index=False)
     else:
         df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
+    
     logging.debug(f"Signal logué : {signal} à {prices[-1]}")
 
-# Fonction pour analyser une cryptomonnaie
+# Fonction pour analyser une cryptomonnaie avec vérification des données et notification d'erreur
 async def analyze_crypto(crypto_id):
     try:
         logging.debug(f"Début de l'analyse pour {crypto_id}.")
         prices = fetch_crypto_data(crypto_id)
+        
+        # Vérification des données avant analyse
         if prices is None or len(prices) < 20:
             logging.warning(f"Données insuffisantes pour {crypto_id}.")
+            await notify_error(f"Données insuffisantes pour {crypto_id}.")
             return
+        
         signal, indicators = analyze_signals(prices)
+        
+        # Log du signal avant l'envoi
+        logging.debug(f"Signal généré pour {crypto_id}: {signal} à {prices[-1]:.2f}")
+        
         log_signal(signal, indicators, prices)
+        
         await send_telegram_message(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
+        
         gc.collect()  # Libérer les ressources inutilisées
+        
     except Exception as e:
         logging.error(f"Erreur lors de l'analyse de {crypto_id} : {e}")
+        await notify_error(f"Erreur détectée dans le bot pour {crypto_id}: {e}")
 
 # Tâche périodique pour analyser toutes les cryptos
 async def trading_task():
     while True:
         logging.info("Début d'une nouvelle itération de trading.")
+        
         tasks = [analyze_crypto(crypto) for crypto in CRYPTO_LIST]
+        
         await asyncio.gather(*tasks)
+        
         log_memory_usage()  # Journaliser l'usage mémoire
+        
         await asyncio.sleep(900)
 
 # Gestion des signaux d'arrêt
@@ -171,7 +205,7 @@ def home():
 def run_flask():
     app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8001)))
 
-# Test manuel
+# Test manuel au démarrage du bot 
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
         asyncio.run(send_telegram_message(CHAT_ID, "Test manuel de connexion Telegram : Bot actif."))
@@ -180,5 +214,7 @@ if TELEGRAM_TOKEN and CHAT_ID:
 
 if __name__ == "__main__":
     logging.info("Démarrage du bot de trading.")
+    
     Thread(target=run_flask, daemon=True).start()
+    
     asyncio.run(trading_task())
