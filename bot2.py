@@ -170,7 +170,7 @@ def home():
 
 # Lancer Flask sur un thread séparé
 def run_flask():
-    app.run(host="0.0.0.0", port=PORT)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8001)
 
 # Test manuel
 if TELEGRAM_TOKEN and CHAT_ID:
