@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import time
 import logging
-from sklearn.preprocessing import StandardScaler
 from telegram import Bot
 from flask import Flask, jsonify
 from threading import Thread
@@ -27,7 +26,9 @@ logging.info("Démarrage de l'application.")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 PORT = int(os.getenv("PORT", 8001))
-CG_API_KEY = "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # Votre clé API ici
+
+# Clé API directe ici
+CG_API_KEY = "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  
 
 if not TELEGRAM_TOKEN or not CHAT_ID:
     raise ValueError("Les variables d'environnement TELEGRAM_TOKEN ou CHAT_ID ne sont pas définies.")
@@ -55,12 +56,13 @@ def log_memory_usage():
 
 # Fonction pour récupérer les données de l'API avec la clé API correcte
 def fetch_crypto_data(crypto_id, retries=3):
-    url = f"https://api.coingecko.com/api/v3/simple/price"  # Utiliser le bon endpoint pour obtenir le prix simple
+    url = f"https://api.coingecko.com/api/v3/simple/price"
     params = {
-        "ids": crypto_id,
+        "ids": crypto_id,  # Par exemple, "bitcoin"
         "vs_currencies": "usd",
-        "x_cg_demo_api_key": CG_API_KEY  # Inclure la clé API ici
+        "x_cg_demo_api_key": "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # Inclure directement votre clé API ici
     }
+    
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=10)
