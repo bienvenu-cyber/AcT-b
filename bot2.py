@@ -74,30 +74,10 @@ def fetch_historical_data(crypto_symbol, interval="hour", limit=50):
     except requests.exceptions.RequestException as e:
         logging.error(f"Erreur lors de la récupération des données historiques : {e}")
         return None
-    
-    for attempt in range(retries):
-        try:
-            response = requests.get(url, params=params, timeout=45)  # Timeout augmenté
-            if response.status_code == 429:  # Trop de requêtes
-                logging.warning("Limite API atteinte. Pause de 60 secondes.")
-                time.sleep(60)
-                continue
-            response.raise_for_status()
-            data = response.json()
-            if "USD" not in data:
-                raise ValueError(f"Pas de données pour {crypto_symbol}.")
-            price = data["USD"]
-            logging.debug(f"Données reçues pour {crypto_symbol}: {price}")
-            return np.array([price], dtype=np.float32)
-        except requests.exceptions.RequestException as e:
-            logging.warning(f"Tentative {attempt + 1} échouée pour {crypto_symbol} : {e}")
-            time.sleep(2)
-    logging.error(f"Impossible de récupérer les données pour {crypto_symbol} après {retries} tentatives.")
-    return None
 
 # Exemple d'utilisation pour Bitcoin et Cardano
-btc_price = fetch_crypto_data("BTC")
-ada_price = fetch_crypto_data("ADA")
+btc_price = fetch_historical_data("bitcoin")
+ada_price = fetch_historical_data("cardano")
 
 if btc_price is not None:
     print(f"Le prix du Bitcoin (BTC) en USD est {btc_price[0]}")
@@ -112,8 +92,8 @@ else:
 # Fonction pour récupérer périodiquement les prix du Bitcoin et Cardano
 def periodic_price_check():
     while True:
-        bitcoin_price = fetch_crypto_data("BTC")
-        cardano_price = fetch_crypto_data("ADA")
+        bitcoin_price = fetch_historical_data("bitcoin")
+        cardano_price = fetch_historical_data("cardano")
         
         if bitcoin_price is not None and cardano_price is not None:
             print(f"Le prix du Bitcoin (BTC) en USD est {bitcoin_price[0]}")
@@ -126,12 +106,12 @@ def periodic_price_check():
 def calculate_indicators(prices):
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
-    sma_short = prices[-10:].mean()
-    sma_long = prices[-20:].mean()
-    ema_short = prices[-12:].mean()
-    ema_long = prices[-26:].mean()
+    sma_short = np.mean(prices[-10:])
+    sma_long = np.mean(prices[-20:])
+    ema_short = np.mean(prices[-12:])
+    ema_long = np.mean(prices[-26:])
     macd = ema_short - ema_long
-    atr = prices[-20:].std()
+    atr = np.std(prices[-20:])
     upper_band = sma_short + (2 * atr)
     lower_band = sma_short - (2 * atr)
     logging.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, MACD={macd}, ATR={atr}, Upper_Band={upper_band}, Lower_Band={lower_band}")
@@ -198,7 +178,7 @@ def log_signal(signal, indicators, prices):
 async def analyze_crypto(crypto_id):
     try:
         logging.debug(f"Début de l'analyse pour {crypto_id}.")
-        prices = fetch_crypto_data(crypto_id)
+        prices = fetch_historical_data(crypto_id)
         
         if prices is None or len(prices) < 20:
             logging.warning(f"Données insuffisantes pour {crypto_id}.")
@@ -242,34 +222,19 @@ def handle_shutdown_signal(signum, frame):
     logging.info("Arrêt de l'application (Signal: %s)", signum)
     logging.info("Redémarrage de l'application...")
     
-    if platform.system() == "Windows":
-        subprocess.Popen([sys.executable] + sys.argv)
-    else:
-        os.execv(sys.executable, ['python'] + sys.argv)
+    if platform.system() == "Darwin":  # Si macOS
+        subprocess.call(["osascript", "-e", "tell application \"Terminal\" to quit"])
+    
+    time.sleep(2)
     sys.exit(0)
 
+# Log des performances
+def log_performance():
+    pass
+
+# Ajout du gestionnaire de signaux
 signal.signal(signal.SIGTERM, handle_shutdown_signal)
-signal.signal(signal.SIGINT, handle_shutdown_signal)
-
-# Route Flask
-@app.route("/")
-def home():
-    return jsonify({"status": "Bot de trading opérationnel."})
-
-# Lancer Flask sur un thread séparé
-async def run_flask():
-    from threading import Thread
-    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
-
-# Test manuel au démarrage du bot
-if TELEGRAM_TOKEN and CHAT_ID:
-    try:
-        asyncio.run(send_telegram_message(CHAT_ID, "Test manuel de connexion Telegram : Bot actif."))
-    except Exception as e:
-        logging.error(f"Échec du test manuel Telegram : {e}")
 
 if __name__ == "__main__":
-    logging.info("Démarrage du bot de trading.")
-    asyncio.run(run_flask())
-    asyncio.run(safe_trading_task())
-    periodic_price_check()  # Lancer la récupération des prix toutes les 5 minutes
+    # Démarrage de l'application Flask
+    app.run(debug=True, host="0.0.0.0", port=PORT)
