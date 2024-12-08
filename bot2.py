@@ -15,6 +15,7 @@ import tracemalloc
 import gc  # Garbage collector pour optimiser la mémoire
 import subprocess
 import platform
+from gunicorn.app.base import BaseApplication
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
@@ -65,7 +66,7 @@ def fetch_crypto_data(crypto_id, retries=3):
     
     for attempt in range(retries):
         try:
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, params=params, timeout=45)  # Augmenter le timeout ici
             response.raise_for_status()
             data = response.json()
             if crypto_id not in data:
@@ -206,7 +207,7 @@ def home():
 
 # Lancer Flask sur un thread séparé
 def run_flask():
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8001)))
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8001)), threaded=True, use_reloader=False)  # Ajout de threaded=True
 
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
@@ -218,4 +219,4 @@ if TELEGRAM_TOKEN and CHAT_ID:
 if __name__ == "__main__":
     logging.info("Démarrage du bot de trading.")
     Thread(target=run_flask, daemon=True).start()
-    asyncio.run(trading_task())
+    asyncio.run(trading_task())t
