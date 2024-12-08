@@ -85,7 +85,20 @@ if ada_price is not None:
 else:
     print("Impossible de récupérer le prix de Cardano.")
 
-# Calcul des indicateurs techniques
+# Fonction pour récupérer périodiquement les prix du Bitcoin et Cardano
+def periodic_price_check():
+    while True:
+        bitcoin_price = fetch_crypto_data("BTC")
+        cardano_price = fetch_crypto_data("ADA")
+        
+        if bitcoin_price is not None and cardano_price is not None:
+            print(f"Le prix du Bitcoin (BTC) en USD est {bitcoin_price[0]}")
+            print(f"Le prix de Cardano (ADA) en USD est {cardano_price[0]}")
+        
+        # Attente de 5 minutes avant le prochain cycle
+        time.sleep(300)
+
+# Fonction de calcul des indicateurs techniques
 def calculate_indicators(prices):
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
@@ -235,3 +248,4 @@ if __name__ == "__main__":
     logging.info("Démarrage du bot de trading.")
     asyncio.run(run_flask())
     asyncio.run(safe_trading_task())
+    periodic_price_check()  # Lancer la récupération des prix toutes les 5 minutes
