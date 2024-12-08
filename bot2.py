@@ -12,6 +12,8 @@ import sys
 import tracemalloc
 import gc  # Garbage collector pour optimiser la mémoire
 import objgraph  # Pour la détection des fuites de mémoire
+import platform
+import subprocess
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
