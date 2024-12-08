@@ -43,15 +43,44 @@ CAPITAL = 10000
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
-# Fonction pour récupérer les données de l'API avec votre clé API
-def fetch_crypto_data(crypto_symbol, retries=3):
-    logging.debug(f"Récupération des données pour {crypto_symbol}")
-    url = "https://min-api.cryptocompare.com/data/price"
+def get_crypto_data(crypto_symbol, limit=2000):
+    """
+    Fonction pour récupérer les données nécessaires au calcul des indicateurs techniques.
+    Récupère les données historiques de prix pour la crypto-monnaie spécifiée.
+    """
+    url = "https://min-api.cryptocompare.com/data/v2/histoday"
     params = {
         "fsym": crypto_symbol,  # Symbole de la crypto-monnaie (ex: "BTC" ou "ADA")
-        "tsyms": "USD",  # Devise cible (USD)
+        "tsym": "USD",  # Devise cible (USD)
+        "limit": limit,  # Nombre de jours de données historiques à récupérer
+        "toTs": int(time.time()),  # Timestamp actuel pour la période de fin (optionnel)
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"  # Votre clé API
     }
+
+    response = requests.get(url, params=params)
+    
+    if response.status_code == 200:
+        data = response.json()
+        # Vérification de la structure des données retournées
+        if 'Data' in data:
+            return data['Data']['Data']
+        else:
+            print("Erreur : Données manquantes dans la réponse.")
+            return None
+    else:
+        print(f"Erreur de récupération des données : {response.status_code}")
+        return None
+
+# Exemple d'utilisation
+crypto_symbol = "BTC"  # Exemple pour Bitcoin
+historical_data = get_crypto_data(crypto_symbol)
+
+if historical_data:
+    print("Données historiques récupérées avec succès.")
+    for data_point in historical_data:
+        print(data_point)
+else:
+    print("Aucune donnée récupérée.")
     
     for attempt in range(retries):
         try:
