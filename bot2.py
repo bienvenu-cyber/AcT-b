@@ -219,4 +219,4 @@ if TELEGRAM_TOKEN and CHAT_ID:
 if __name__ == "__main__":
     logging.info("Démarrage du bot de trading.")
     Thread(target=run_flask, daemon=True).start()
-    asyncio.run(trading_task())t
+    asyncio.run(trading_task())
