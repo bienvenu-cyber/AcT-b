@@ -13,6 +13,8 @@ import signal
 import sys
 import tracemalloc
 import gc  # Garbage collector pour optimiser la mémoire
+import subprocess
+import platform
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
@@ -53,6 +55,7 @@ def log_memory_usage():
 
 # Fonction pour récupérer les données de l'API avec votre clé API
 def fetch_crypto_data(crypto_id, retries=3):
+    logging.debug(f"Récupération des données pour {crypto_id}")
     url = f"https://api.coingecko.com/api/v3/simple/price"
     params = {
         "ids": crypto_id,
@@ -88,6 +91,7 @@ def calculate_indicators(prices):
     atr = prices[-20:].std()
     upper_band = sma_short + (2 * atr)
     lower_band = sma_short - (2 * atr)
+    logging.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, MACD={macd}, ATR={atr}, Upper_Band={upper_band}, Lower_Band={lower_band}")
     return {
         "SMA_short": sma_short,
         "SMA_long": sma_long,
@@ -179,11 +183,17 @@ async def trading_task():
         log_memory_usage()
         await asyncio.sleep(900)
 
-# Gestion des signaux d'arrêt
+# Gestion des signaux d'arrêt et redémarrage automatique
 def handle_shutdown_signal(signum, frame):
     logging.info("Arrêt de l'application (Signal: %s)", signum)
     executor.shutdown(wait=True)
     logging.info("Pool de threads arrêté.")
+    logging.info("Redémarrage de l'application...")
+    
+    if platform.system() == "Windows":
+        subprocess.Popen([sys.executable] + sys.argv)
+    else:
+        os.execv(sys.executable, ['python'] + sys.argv)
     sys.exit(0)
 
 signal.signal(signal.SIGTERM, handle_shutdown_signal)
