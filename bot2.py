@@ -10,8 +10,8 @@ import asyncio
 import signal
 import sys
 import tracemalloc
-import gc  # Garbage collector pour optimiser la mémoire
-import objgraph  # Pour la détection des fuites de mémoire
+import gc
+import objgraph
 import platform
 import subprocess
 
@@ -43,93 +43,44 @@ CAPITAL = 10000
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
-def get_crypto_data(crypto_symbol, limit=2000):
-    """
-    Fonction pour récupérer les données nécessaires au calcul des indicateurs techniques.
-    Récupère les données historiques de prix pour la crypto-monnaie spécifiée.
-    """
+def get_crypto_data(crypto_symbol, limit=2000, retries=5):
     url = "https://min-api.cryptocompare.com/data/v2/histoday"
     params = {
-        "fsym": crypto_symbol,  # Symbole de la crypto-monnaie (ex: "BTC" ou "ADA")
-        "tsym": "USD",  # Devise cible (USD)
-        "limit": limit,  # Nombre de jours de données historiques à récupérer
-        "toTs": int(time.time()),  # Timestamp actuel pour la période de fin (optionnel)
-        "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"  # Votre clé API
+        "fsym": crypto_symbol,  
+        "tsym": "USD",  
+        "limit": limit,  
+        "toTs": int(time.time()),  
+        "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c" 
     }
 
-    response = requests.get(url, params=params)
-    
-    if response.status_code == 200:
-        data = response.json()
-        # Vérification de la structure des données retournées
-        if 'Data' in data:
-            return data['Data']['Data']
-        else:
-            print("Erreur : Données manquantes dans la réponse.")
-            return None
-    else:
-        print(f"Erreur de récupération des données : {response.status_code}")
-        return None
-
-# Exemple d'utilisation
-crypto_symbol = "BTC"  # Exemple pour Bitcoin
-historical_data = get_crypto_data(crypto_symbol)
-
-if historical_data:
-    print("Données historiques récupérées avec succès.")
-    for data_point in historical_data:
-        print(data_point)
-else:
-    print("Aucune donnée récupérée.")
-    
     for attempt in range(retries):
         try:
-            response = requests.get(url, params=params, timeout=45)  # Timeout augmenté
-            if response.status_code == 429:  # Trop de requêtes
+            response = requests.get(url, params=params, timeout=45)
+            if response.status_code == 429:
                 logging.warning("Limite API atteinte. Pause de 60 secondes.")
                 time.sleep(60)
                 continue
             response.raise_for_status()
             data = response.json()
-            if "USD" not in data:
-                raise ValueError(f"Pas de données pour {crypto_symbol}.")
-            price = data["USD"]
-            logging.debug(f"Données reçues pour {crypto_symbol}: {price}")
-            return np.array([price], dtype=np.float32)
+            if "Data" in data:
+                return data['Data']['Data']
+            else:
+                logging.error("Erreur : Données manquantes dans la réponse.")
+                return None
         except requests.exceptions.RequestException as e:
             logging.warning(f"Tentative {attempt + 1} échouée pour {crypto_symbol} : {e}")
             time.sleep(2)
+    
     logging.error(f"Impossible de récupérer les données pour {crypto_symbol} après {retries} tentatives.")
     return None
 
-# Exemple d'utilisation pour Bitcoin et Cardano
-btc_price = fetch_crypto_data("BTC")
-ada_price = fetch_crypto_data("ADA")
-
-if btc_price is not None:
-    print(f"Le prix du Bitcoin (BTC) en USD est {btc_price[0]}")
+# Exemple d'utilisation
+btc_data = get_crypto_data("BTC")
+if btc_data:
+    logging.debug("Données historiques récupérées pour Bitcoin.")
 else:
-    print("Impossible de récupérer le prix du Bitcoin.")
+    logging.error("Aucune donnée récupérée pour Bitcoin.")
 
-if ada_price is not None:
-    print(f"Le prix de Cardano (ADA) en USD est {ada_price[0]}")
-else:
-    print("Impossible de récupérer le prix de Cardano.")
-
-# Fonction pour récupérer périodiquement les prix du Bitcoin et Cardano
-def periodic_price_check():
-    while True:
-        bitcoin_price = fetch_crypto_data("BTC")
-        cardano_price = fetch_crypto_data("ADA")
-        
-        if bitcoin_price is not None and cardano_price is not None:
-            print(f"Le prix du Bitcoin (BTC) en USD est {bitcoin_price[0]}")
-            print(f"Le prix de Cardano (ADA) en USD est {cardano_price[0]}")
-        
-        # Attente de 5 minutes avant le prochain cycle
-        time.sleep(300)
-
-# Fonction de calcul des indicateurs techniques
 def calculate_indicators(prices):
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
@@ -151,61 +102,11 @@ def calculate_indicators(prices):
         "Lower_Band": lower_band,
     }
 
-# Analyse des signaux
-def analyze_signals(prices):
-    indicators = calculate_indicators(prices)
-    logging.debug(f"Indicateurs calculés : {indicators}")
-
-    if prices[-1] > indicators["Upper_Band"]:
-        logging.info("Signal de vente généré.")
-        return "SELL", indicators
-    elif prices[-1] < indicators["Lower_Band"]:
-        logging.info("Signal d'achat généré.")
-        return "BUY", indicators
-    
-    logging.info("Aucun signal, maintien de la position.")
-    return "HOLD", indicators
-
-# Envoi asynchrone d'un message Telegram
-async def send_telegram_message(chat_id, message):
-    try:
-        await bot.send_message(chat_id=chat_id, text=message)
-        logging.info(f"Message Telegram envoyé : {message}")
-    except Exception as e:
-        logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
-
-# Notification d'erreur en cas d'exception
-async def notify_error(message):
-    try:
-        await bot.send_message(chat_id=CHAT_ID, text=message)
-        logging.info(f"Notification d'erreur envoyée : {message}")
-    except Exception as e:
-        logging.error(f"Erreur lors de l'envoi de la notification d'erreur : {e}")
-
-# Journalisation des signaux
-def log_signal(signal, indicators, prices):
-    df = pd.DataFrame([{
-        "Signal": signal,
-        "Price": prices[-1],
-        "SMA_short": indicators["SMA_short"],
-        "SMA_long": indicators["SMA_long"],
-        "MACD": indicators["MACD"],
-        "ATR": indicators["ATR"],
-        "Time": time.strftime("%Y-%m-%d %H:%M:%S"),
-    }])
-    
-    if not os.path.exists(SIGNAL_LOG):
-        df.to_csv(SIGNAL_LOG, index=False)
-    else:
-        df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
-    
-    logging.debug(f"Signal logué : {signal} à {prices[-1]}")
-
 # Fonction pour analyser une cryptomonnaie
 async def analyze_crypto(crypto_id):
     try:
         logging.debug(f"Début de l'analyse pour {crypto_id}.")
-        prices = fetch_crypto_data(crypto_id)
+        prices = get_crypto_data(crypto_id)
         
         if prices is None or len(prices) < 20:
             logging.warning(f"Données insuffisantes pour {crypto_id}.")
@@ -226,7 +127,6 @@ async def analyze_crypto(crypto_id):
         logging.error(f"Erreur lors de l'analyse de {crypto_id} : {e}")
         await notify_error(f"Erreur détectée dans le bot pour {crypto_id}: {e}")
 
-# Tâche périodique
 async def trading_task():
     while True:
         logging.info("Début d'une nouvelle itération de trading.")
@@ -244,7 +144,6 @@ async def safe_trading_task():
         await notify_error(f"Erreur critique détectée : {e}")
         sys.exit(1)  # Arrêt propre
 
-# Gestion des signaux d'arrêt et redémarrage automatique
 def handle_shutdown_signal(signum, frame):
     logging.info("Arrêt de l'application (Signal: %s)", signum)
     logging.info("Redémarrage de l'application...")
@@ -258,12 +157,10 @@ def handle_shutdown_signal(signum, frame):
 signal.signal(signal.SIGTERM, handle_shutdown_signal)
 signal.signal(signal.SIGINT, handle_shutdown_signal)
 
-# Route Flask
 @app.route("/")
 def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
-# Lancer Flask sur un thread séparé
 async def run_flask():
     from threading import Thread
     Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
@@ -279,4 +176,4 @@ if __name__ == "__main__":
     logging.info("Démarrage du bot de trading.")
     asyncio.run(run_flask())
     asyncio.run(safe_trading_task())
-    periodic_price_check()  # Lancer la récupération des prix toutes les 5 minutes
+    periodic_price_check()
