@@ -41,43 +41,49 @@ CAPITAL = 10000
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
-# Fonction pour surveiller la mémoire
-def log_memory_usage():
-    snapshot = tracemalloc.take_snapshot()
-    top_stats = snapshot.statistics("lineno")
-    logging.debug("[TOP 10 Mémoire]")
-    for stat in top_stats[:10]:
-        logging.debug(stat)
-
 # Fonction pour récupérer les données de l'API avec votre clé API
-def fetch_crypto_data(crypto_id, retries=3):
-    logging.debug(f"Récupération des données pour {crypto_id}")
-    url = f"https://api.coingecko.com/api/v3/simple/price"
+def fetch_crypto_data(crypto_symbol, retries=3):
+    logging.debug(f"Récupération des données pour {crypto_symbol}")
+    url = "https://min-api.cryptocompare.com/data/price"
     params = {
-        "ids": crypto_id,
-        "vs_currencies": "usd",
-        "x_cg_demo_api_key": "CG-JL3PvcpDM8bFWUF5wmNHZ8iA"  # Votre clé API intégrée
+        "fsym": crypto_symbol,  # Symbole de la crypto-monnaie (ex: "BTC" ou "ADA")
+        "tsyms": "USD",  # Devise cible (USD)
+        "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"  # Votre clé API
     }
     
     for attempt in range(retries):
         try:
-            response = requests.get(url, params=params, timeout=45)  # Augmenter le timeout ici
+            response = requests.get(url, params=params, timeout=45)  # Timeout augmenté
             if response.status_code == 429:  # Trop de requêtes
                 logging.warning("Limite API atteinte. Pause de 60 secondes.")
                 time.sleep(60)
                 continue
             response.raise_for_status()
             data = response.json()
-            if crypto_id not in data:
-                raise ValueError(f"Pas de données pour {crypto_id}.")
-            price = data[crypto_id]['usd']
-            logging.debug(f"Données reçues pour {crypto_id}: {price}")
+            if "USD" not in data:
+                raise ValueError(f"Pas de données pour {crypto_symbol}.")
+            price = data["USD"]
+            logging.debug(f"Données reçues pour {crypto_symbol}: {price}")
             return np.array([price], dtype=np.float32)
         except requests.exceptions.RequestException as e:
-            logging.warning(f"Tentative {attempt + 1} échouée pour {crypto_id} : {e}")
+            logging.warning(f"Tentative {attempt + 1} échouée pour {crypto_symbol} : {e}")
             time.sleep(2)
-    logging.error(f"Impossible de récupérer les données pour {crypto_id} après {retries} tentatives.")
+    logging.error(f"Impossible de récupérer les données pour {crypto_symbol} après {retries} tentatives.")
     return None
+
+# Exemple d'utilisation pour Bitcoin et Cardano
+btc_price = fetch_crypto_data("BTC")
+ada_price = fetch_crypto_data("ADA")
+
+if btc_price is not None:
+    print(f"Le prix du Bitcoin (BTC) en USD est {btc_price[0]}")
+else:
+    print("Impossible de récupérer le prix du Bitcoin.")
+
+if ada_price is not None:
+    print(f"Le prix de Cardano (ADA) en USD est {ada_price[0]}")
+else:
+    print("Impossible de récupérer le prix de Cardano.")
 
 # Calcul des indicateurs techniques
 def calculate_indicators(prices):
