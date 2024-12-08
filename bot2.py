@@ -55,7 +55,7 @@ def fetch_historical_data(crypto_symbol, interval="hour", limit=50):
     
     url = f"{base_url}{endpoint}"
     params = {
-        "fsym": crypto_symbol,
+        "fsym": crypto_symbol.upper(),  # Assurer que le symbole est en majuscule
         "tsym": "USD",
         "limit": limit,
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"  # Votre clé API ici
@@ -65,14 +65,17 @@ def fetch_historical_data(crypto_symbol, interval="hour", limit=50):
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
+        
+        # Vérifier si l'API a renvoyé un succès
         if data["Response"] == "Success":
             # Récupérer les prix de clôture
             return [item["close"] for item in data["Data"]["Data"]]
         else:
-            logging.error(f"Erreur de l'API : {data['Message']}")
+            # Gestion d'erreurs plus détaillée
+            logging.error(f"Erreur de l'API pour {crypto_symbol}: {data['Message']}")
             return None
     except requests.exceptions.RequestException as e:
-        logging.error(f"Erreur lors de la récupération des données historiques : {e}")
+        logging.error(f"Erreur lors de la récupération des données historiques pour {crypto_symbol}: {e}")
         return None
 
 # Exemple d'utilisation pour Bitcoin et Cardano
@@ -98,9 +101,14 @@ def periodic_price_check():
         if bitcoin_price is not None and cardano_price is not None:
             print(f"Le prix du Bitcoin (BTC) en USD est {bitcoin_price[0]}")
             print(f"Le prix de Cardano (ADA) en USD est {cardano_price[0]}")
+        else:
+            print("Impossible de récupérer les prix des cryptos.")
         
         # Attente de 5 minutes avant le prochain cycle
         time.sleep(300)
+
+# Lancer la vérification périodique (commenté pour éviter une exécution infinie)
+# periodic_price_check()
 
 # Fonction de calcul des indicateurs techniques
 def calculate_indicators(prices):
