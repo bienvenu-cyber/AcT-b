@@ -6,16 +6,12 @@ import time
 import logging
 from telegram import Bot
 from flask import Flask, jsonify
-from threading import Thread
-from concurrent.futures import ThreadPoolExecutor
 import asyncio
 import signal
 import sys
 import tracemalloc
 import gc  # Garbage collector pour optimiser la mémoire
-import subprocess
-import platform
-from gunicorn.app.base import BaseApplication
+import objgraph  # Pour la détection des fuites de mémoire
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
@@ -23,7 +19,7 @@ tracemalloc.start()
 # Configuration des logs
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-logging.info("Démarrage de l'application.")
+logging.debug("Démarrage de l'application.")
 
 # Variables d'environnement
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -44,7 +40,6 @@ MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 10000
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
-executor = ThreadPoolExecutor(max_workers=8)  # Pool de threads pour optimisation
 
 # Fonction pour surveiller la mémoire
 def log_memory_usage():
@@ -67,6 +62,10 @@ def fetch_crypto_data(crypto_id, retries=3):
     for attempt in range(retries):
         try:
             response = requests.get(url, params=params, timeout=45)  # Augmenter le timeout ici
+            if response.status_code == 429:  # Trop de requêtes
+                logging.warning("Limite API atteinte. Pause de 60 secondes.")
+                time.sleep(60)
+                continue
             response.raise_for_status()
             data = response.json()
             if crypto_id not in data:
@@ -169,6 +168,8 @@ async def analyze_crypto(crypto_id):
         log_signal(signal, indicators, prices)
         await send_telegram_message(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
         
+        # Analyser les fuites de mémoire
+        objgraph.show_most_common_types(limit=10)
         gc.collect()
         
     except Exception as e:
@@ -184,11 +185,18 @@ async def trading_task():
         log_memory_usage()
         await asyncio.sleep(900)
 
+# Fonction de sécurité pour le trading task
+async def safe_trading_task():
+    try:
+        await trading_task()
+    except Exception as e:
+        logging.error(f"Erreur globale dans trading_task: {e}")
+        await notify_error(f"Erreur critique détectée : {e}")
+        sys.exit(1)  # Arrêt propre
+
 # Gestion des signaux d'arrêt et redémarrage automatique
 def handle_shutdown_signal(signum, frame):
     logging.info("Arrêt de l'application (Signal: %s)", signum)
-    executor.shutdown(wait=True)
-    logging.info("Pool de threads arrêté.")
     logging.info("Redémarrage de l'application...")
     
     if platform.system() == "Windows":
@@ -206,8 +214,9 @@ def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
 # Lancer Flask sur un thread séparé
-def run_flask():
-    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 8001)), threaded=True, use_reloader=False)  # Ajout de threaded=True
+async def run_flask():
+    from threading import Thread
+    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
 
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
@@ -218,5 +227,5 @@ if TELEGRAM_TOKEN and CHAT_ID:
 
 if __name__ == "__main__":
     logging.info("Démarrage du bot de trading.")
-    Thread(target=run_flask, daemon=True).start()
-    asyncio.run(trading_task())
+    asyncio.run(run_flask())
+    asyncio.run(safe_trading_task())
