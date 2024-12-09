@@ -37,7 +37,7 @@ bot = Bot(token=TELEGRAM_TOKEN)
 app = Flask(__name__)
 
 # Constantes
-CRYPTO_LIST = ["bitcoin", "cardano"]
+CRYPTO_LIST = ["BTC", "ADA"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -55,7 +55,7 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
 
     url = f"{base_url}{endpoint}"
     params = {
-        "fsym": crypto_symbol.upper(),  
+        "fsym": crypto_symbol.upper(),
         "tsym": currency.upper(),
         "limit": limit,
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
@@ -83,7 +83,7 @@ def calculate_indicators(prices):
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
     sma_short = np.mean(prices[-10:])
     sma_long = np.mean(prices[-20:])
-    ema_short = np.mean(prices[-12:])  
+    ema_short = np.mean(prices[-12:])
     ema_long = np.mean(prices[-26:])
     macd = ema_short - ema_long
     atr = np.std(prices[-20:])
