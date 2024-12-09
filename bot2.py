@@ -79,8 +79,8 @@ def fetch_historical_data(crypto_symbol, interval="hour", limit=50):
         return None
 
 # Exemple d'utilisation pour Bitcoin et Cardano
-btc_price = fetch_historical_data("bitcoin")
-ada_price = fetch_historical_data("cardano")
+btc_price = fetch_historical_data("BTC")
+ada_price = fetch_historical_data("ADA")
 
 if btc_price is not None:
     print(f"Le prix du Bitcoin (BTC) en USD est {btc_price[0]}")
