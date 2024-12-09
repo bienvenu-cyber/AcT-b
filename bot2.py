@@ -243,6 +243,22 @@ def log_performance():
 # Ajout du gestionnaire de signaux
 signal.signal(signal.SIGTERM, handle_shutdown_signal)
 
+# Route Flask
+@app.route("/")
+def home():
+    return jsonify({"status": "Bot de trading opérationnel."})
+
+# Lancer Flask sur un thread séparé
+async def run_flask():
+    from threading import Thread
+    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
+
+# Test manuel au démarrage du bot
+if TELEGRAM_TOKEN and CHAT_ID:
+    try:
+        asyncio.run(send_telegram_message(CHAT_ID, "Test manuel de connexion Telegram : Bot actif."))
+    except Exception as e:
+        logging.error(f"Échec du test manuel Telegram : {e}")
 if __name__ == "__main__":
     # Démarrage de l'application Flask
     app.run(debug=True, host="0.0.0.0", port=PORT)
