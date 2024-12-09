@@ -92,33 +92,39 @@ if ada_price is not None:
 else:
     print("Impossible de récupérer le prix de Cardano.")
 
-# Fonction pour récupérer périodiquement les prix du Bitcoin et Cardano
-def periodic_price_check():
-    while True:
-        bitcoin_price = fetch_historical_data("bitcoin")
-        cardano_price = fetch_historical_data("cardano")
-        
-        if bitcoin_price is not None and cardano_price is not None:
-            print(f"Le prix du Bitcoin (BTC) en USD est {bitcoin_price[0]}")
-            print(f"Le prix de Cardano (ADA) en USD est {cardano_price[0]}")
+# Fonction pour récupérer les données historiques
+def fetch_historical_data(symbol, currency, limit=50):
+    url = f"https://min-api.cryptocompare.com/data/v2/histohour"
+    params = {
+        "fsym": symbol,
+        "tsym": currency,
+        "limit": limit,
+        "api_key": 70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c
+    }
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("Response") == "Success":
+            # Extraire les prix de clôture
+            prices = [item["close"] for item in data["Data"]["Data"]]
+            logging.debug(f"Prix récupérés pour {symbol}/{currency}: {prices}")
+            return prices
         else:
-            print("Impossible de récupérer les prix des cryptos.")
-        
-        # Attente de 5 minutes avant le prochain cycle
-        time.sleep(300)
-
-# Lancer la vérification périodique (commenté pour éviter une exécution infinie)
-# periodic_price_check()
+            logging.error(f"Erreur dans la réponse de l'API : {data}")
+            return None
+    except Exception as e:
+        logging.error(f"Erreur lors de la récupération des données : {e}")
+        return None
 
 # Fonction de calcul des indicateurs techniques
-_indicators(df: pd.DataFrame) -> pd.DataFrame:
-    if not df.empty
+def calculate_indicators(prices):
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
     sma_short = np.mean(prices[-10:])
     sma_long = np.mean(prices[-20:])
-    ema_short = np.mean(prices[-12:])
-    ema_long = np.mean(prices[-26:])
+    ema_short = np.mean(prices[-12:])  # EMA simplifiée
+    ema_long = np.mean(prices[-26:])  # EMA simplifiée
     macd = ema_short - ema_long
     atr = np.std(prices[-20:])
     upper_band = sma_short + (2 * atr)
@@ -145,8 +151,27 @@ def analyze_signals(prices):
         logging.info("Signal d'achat généré.")
         return "BUY", indicators
     
-    logging.info("Aucun signal, maintien de la position.")
+    logging.info("Aucun signal détecté.")
     return "HOLD", indicators
+
+# Fonction principale de vérification périodique
+def periodic_price_check(symbol, currency):
+    while True:
+        prices = fetch_historical_data(symbol, currency)
+        if prices:
+            signal, indicators = analyze_signals(prices)
+            logging.info(f"Signal généré pour {symbol}/{currency}: {signal}")
+        else:
+            logging.error("Impossible d'analyser les données, données non disponibles.")
+        time.sleep(3600)  # Attendre 1 heure avant la prochaine vérification
+
+# Exemple d'utilisation
+if __name__ == "__main__":
+    # Lancer la vérification pour BTC/USD
+    try:
+        periodic_price_check("BTC", "USD")
+    except KeyboardInterrupt:
+        logging.info("Arrêt manuel du script.")
 
 # Envoi asynchrone d'un message Telegram
 async def send_telegram_message(chat_id, message):
