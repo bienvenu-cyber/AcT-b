@@ -1,3 +1,5 @@
+code 2
+
 import os
 import requests
 import numpy as np
@@ -14,7 +16,6 @@ import gc  # Garbage collector pour optimiser la mémoire
 import objgraph  # Pour la détection des fuites de mémoire
 import platform
 import subprocess
-from threading import Thread
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
@@ -47,11 +48,58 @@ SIGNAL_LOG = "signal_log.csv"
 # Fonction pour récupérer les données de l'API avec votre clé API
 def fetch_historical_data(crypto_symbol, interval="hour", limit=50):
     base_url = "https://min-api.cryptocompare.com/data/v2/"
-    endpoint = "histohour" if interval == "hour" else "histoday"
+    if interval == "hour":
+        endpoint = "histohour"
+    elif interval == "day":
+        endpoint = "histoday"
+    else:
+        raise ValueError("Intervalle non supporté. Utilisez 'hour' ou 'day'.")
+    
     url = f"{base_url}{endpoint}"
     params = {
         "fsym": crypto_symbol.upper(),  # Assurer que le symbole est en majuscule
         "tsym": "USD",
+        "limit": 50,
+        "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"  # Votre clé API ici
+    }
+    
+    try:
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        # Vérifier si l'API a renvoyé un succès
+        if data["Response"] == "Success":
+            # Récupérer les prix de clôture
+            return [item["close"] for item in data["Data"]["Data"]]
+        else:
+            # Gestion d'erreurs plus détaillée
+            logging.error(f"Erreur de l'API pour {crypto_symbol}: {data['Message']}")
+            return None
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Erreur lors de la récupération des données historiques pour {crypto_symbol}: {e}")
+        return None
+
+# Exemple d'utilisation pour Bitcoin et Cardano
+btc_price = fetch_historical_data("BTC")
+ada_price = fetch_historical_data("ADA")
+
+if btc_price is not None:
+    print(f"Le prix du Bitcoin (BTC) en USD est {btc_price[0]}")
+else:
+    print("Impossible de récupérer le prix du Bitcoin.")
+
+if ada_price is not None:
+    print(f"Le prix de Cardano (ADA) en USD est {ada_price[0]}")
+else:
+    print("Impossible de récupérer le prix de Cardano.")
+
+# Fonction pour récupérer les données historiques
+def fetch_historical_data(symbol, currency, limit=50):
+    url = f"https://min-api.cryptocompare.com/data/v2/histohour"
+    params = {
+        "fsym": symbol,
+        "tsym": currency,
         "limit": limit,
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
     }
@@ -60,17 +108,18 @@ def fetch_historical_data(crypto_symbol, interval="hour", limit=50):
         response.raise_for_status()
         data = response.json()
         if data.get("Response") == "Success":
+            # Extraire les prix de clôture
             prices = [item["close"] for item in data["Data"]["Data"]]
-            logging.debug(f"Données récupérées pour {crypto_symbol}: {prices}")
+            logging.debug(f"Prix récupérés pour {symbol}/{currency}: {prices}")
             return prices
         else:
-            logging.error(f"Erreur de l'API pour {crypto_symbol}: {data['Message']}")
+            logging.error(f"Erreur dans la réponse de l'API : {data}")
             return None
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Erreur lors de la récupération des données pour {crypto_symbol}: {e}")
+    except Exception as e:
+        logging.error(f"Erreur lors de la récupération des données : {e}")
         return None
 
-# Fonction pour calculer les indicateurs techniques
+# Fonction de calcul des indicateurs techniques
 def calculate_indicators(prices):
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
@@ -107,31 +156,44 @@ def analyze_signals(prices):
     logging.info("Aucun signal détecté.")
     return "HOLD", indicators
 
-# Fonction pour analyser une cryptomonnaie et déclencher les calculs
-async def analyze_crypto(crypto_id):
-    try:
-        logging.debug(f"Début de l'analyse pour {crypto_id}.")
-        prices = fetch_historical_data(crypto_id.upper(), interval="hour")
-        
-        if prices is None or len(prices) < 20:
-            logging.warning(f"Données insuffisantes pour {crypto_id}.")
-            await send_telegram_message(CHAT_ID, f"Données insuffisantes pour {crypto_id}.")
-            return
-        
-        signal, indicators = analyze_signals(prices)
-        log_signal(crypto_id, signal, indicators, prices)
-        await send_telegram_message(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
-        
-        gc.collect()  # Optimisation mémoire après chaque analyse
-        
-    except Exception as e:
-        logging.error(f"Erreur lors de l'analyse de {crypto_id} : {e}")
-        await send_telegram_message(CHAT_ID, f"Erreur détectée pour {crypto_id}: {e}")
+# Fonction principale de vérification périodique
+def periodic_price_check(symbol, currency):
+    while True:
+        prices = fetch_historical_data(symbol, currency)
+        if prices:
+            signal, indicators = analyze_signals(prices)
+            logging.info(f"Signal généré pour {symbol}/{currency}: {signal}")
+        else:
+            logging.error("Impossible d'analyser les données, données non disponibles.")
+        time.sleep(3600)  # Attendre 1 heure avant la prochaine vérification
 
-# Fonction de journalisation des signaux
-def log_signal(crypto_id, signal, indicators, prices):
+# Exemple d'utilisation
+if __name__ == "__main__":
+    # Lancer la vérification pour BTC/USD
+    try:
+        periodic_price_check("BTC", "USD")
+    except KeyboardInterrupt:
+        logging.info("Arrêt manuel du script.")
+
+# Envoi asynchrone d'un message Telegram
+async def send_telegram_message(chat_id, message):
+    try:
+        await bot.send_message(chat_id=chat_id, text=message)
+        logging.info(f"Message Telegram envoyé : {message}")
+    except Exception as e:
+        logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
+
+# Notification d'erreur en cas d'exception
+async def notify_error(message):
+    try:
+        await bot.send_message(chat_id=CHAT_ID, text=message)
+        logging.info(f"Notification d'erreur envoyée : {message}")
+    except Exception as e:
+        logging.error(f"Erreur lors de l'envoi de la notification d'erreur : {e}")
+
+# Journalisation des signaux
+def log_signal(signal, indicators, prices):
     df = pd.DataFrame([{
-        "Crypto": crypto_id,
         "Signal": signal,
         "Price": prices[-1],
         "SMA_short": indicators["SMA_short"],
@@ -146,31 +208,85 @@ def log_signal(crypto_id, signal, indicators, prices):
     else:
         df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
     
-    logging.debug(f"Signal logué pour {crypto_id}: {signal} à {prices[-1]}")
+    logging.debug(f"Signal logué : {signal} à {prices[-1]}")
 
-# Envoi asynchrone d'un message Telegram
-async def send_telegram_message(chat_id, message):
+# Fonction pour analyser une cryptomonnaie
+async def analyze_crypto(crypto_id):
     try:
-        await bot.send_message(chat_id=chat_id, text=message)
-        logging.info(f"Message Telegram envoyé : {message}")
+        logging.debug(f"Début de l'analyse pour {crypto_id}.")
+        prices = fetch_historical_data(crypto_id)
+        
+        if prices is None or len(prices) < 20:
+            logging.warning(f"Données insuffisantes pour {crypto_id}.")
+            await notify_error(f"Données insuffisantes pour {crypto_id}.")
+            return
+        
+        signal, indicators = analyze_signals(prices)
+        logging.debug(f"Signal généré pour {crypto_id}: {signal} à {prices[-1]:.2f}")
+        
+        log_signal(signal, indicators, prices)
+        await send_telegram_message(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
+        
+        # Analyser les fuites de mémoire
+        objgraph.show_most_common_types(limit=10)
+        gc.collect()
+        
     except Exception as e:
-        logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
+        logging.error(f"Erreur lors de l'analyse de {crypto_id} : {e}")
+        await notify_error(f"Erreur détectée dans le bot pour {crypto_id}: {e}")
 
-# Tâche principale de trading
+# Tâche périodique
 async def trading_task():
     while True:
         logging.info("Début d'une nouvelle itération de trading.")
         tasks = [analyze_crypto(crypto) for crypto in CRYPTO_LIST]
         await asyncio.gather(*tasks)
+        log_memory_usage()
         await asyncio.sleep(900)
 
-# Démarrage Flask et asyncio ensemble
-async def run_bot():
-    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
-    await trading_task()
-
-if __name__ == "__main__":
+# Fonction de sécurité pour le trading task
+async def safe_trading_task():
     try:
-        asyncio.run(run_bot())
-    except KeyboardInterrupt:
-        logging.info("Arrêt manuel du bot.")
+        await trading_task()
+    except Exception as e:
+        logging.error(f"Erreur globale dans trading_task: {e}")
+        await notify_error(f"Erreur critique détectée : {e}")
+        sys.exit(1)  # Arrêt propre
+
+# Gestion des signaux d'arrêt et redémarrage automatique
+def handle_shutdown_signal(signum, frame):
+    logging.info("Arrêt de l'application (Signal: %s)", signum)
+    logging.info("Redémarrage de l'application...")
+    
+    if platform.system() == "Darwin":  # Si macOS
+        subprocess.call(["osascript", "-e", "tell application \"Terminal\" to quit"])
+    
+    time.sleep(2)
+    sys.exit(0)
+
+# Log des performances
+def log_performance():
+    pass
+
+# Ajout du gestionnaire de signaux
+signal.signal(signal.SIGTERM, handle_shutdown_signal)
+
+# Route Flask
+@app.route("/")
+def home():
+    return jsonify({"status": "Bot de trading opérationnel."})
+
+# Lancer Flask sur un thread séparé
+async def run_flask():
+    from threading import Thread
+    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
+
+# Test manuel au démarrage du bot
+if TELEGRAM_TOKEN and CHAT_ID:
+    try:
+        asyncio.run(send_telegram_message(CHAT_ID, "Test manuel de connexion Telegram : Bot actif."))
+    except Exception as e:
+        logging.error(f"Échec du test manuel Telegram : {e}")
+if __name__ == "__main__":
+    # Démarrage de l'application Flask
+    app.run(debug=True, host="127.0.0.1", port=PORT)
