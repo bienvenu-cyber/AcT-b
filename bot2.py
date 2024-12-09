@@ -111,7 +111,8 @@ def periodic_price_check():
 # periodic_price_check()
 
 # Fonction de calcul des indicateurs techniques
-def calculate_indicators(prices):
+_indicators(df: pd.DataFrame) -> pd.DataFrame:
+    if not df.empty
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
     sma_short = np.mean(prices[-10:])
