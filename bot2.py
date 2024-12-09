@@ -261,4 +261,4 @@ if TELEGRAM_TOKEN and CHAT_ID:
         logging.error(f"Échec du test manuel Telegram : {e}")
 if __name__ == "__main__":
     # Démarrage de l'application Flask
-    app.run(debug=True, host="0.0.0.0", port=PORT)
+    app.run(debug=True, host="127.0.0.1", port=PORT)
