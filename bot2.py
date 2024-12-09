@@ -1,5 +1,3 @@
-code 2
-
 import os
 import requests
 import numpy as np
@@ -41,12 +39,12 @@ app = Flask(__name__)
 # Constantes
 CRYPTO_LIST = ["bitcoin", "cardano"]
 MAX_POSITION_PERCENTAGE = 0.1
-CAPITAL = 10000
+CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
-# Fonction pour récupérer les données de l'API avec votre clé API
-def fetch_historical_data(crypto_symbol, interval="hour", limit=50):
+# Récupération des données historiques pour les cryptomonnaies
+def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=50):
     base_url = "https://min-api.cryptocompare.com/data/v2/"
     if interval == "hour":
         endpoint = "histohour"
@@ -54,79 +52,39 @@ def fetch_historical_data(crypto_symbol, interval="hour", limit=50):
         endpoint = "histoday"
     else:
         raise ValueError("Intervalle non supporté. Utilisez 'hour' ou 'day'.")
-    
+
     url = f"{base_url}{endpoint}"
     params = {
-        "fsym": crypto_symbol.upper(),  # Assurer que le symbole est en majuscule
-        "tsym": "USD",
-        "limit": 50,
-        "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"  # Votre clé API ici
-    }
-    
-    try:
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
-        
-        # Vérifier si l'API a renvoyé un succès
-        if data["Response"] == "Success":
-            # Récupérer les prix de clôture
-            return [item["close"] for item in data["Data"]["Data"]]
-        else:
-            # Gestion d'erreurs plus détaillée
-            logging.error(f"Erreur de l'API pour {crypto_symbol}: {data['Message']}")
-            return None
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Erreur lors de la récupération des données historiques pour {crypto_symbol}: {e}")
-        return None
-
-# Exemple d'utilisation pour Bitcoin et Cardano
-btc_price = fetch_historical_data("BTC")
-ada_price = fetch_historical_data("ADA")
-
-if btc_price is not None:
-    print(f"Le prix du Bitcoin (BTC) en USD est {btc_price[0]}")
-else:
-    print("Impossible de récupérer le prix du Bitcoin.")
-
-if ada_price is not None:
-    print(f"Le prix de Cardano (ADA) en USD est {ada_price[0]}")
-else:
-    print("Impossible de récupérer le prix de Cardano.")
-
-# Fonction pour récupérer les données historiques
-def fetch_historical_data(symbol, currency, limit=50):
-    url = f"https://min-api.cryptocompare.com/data/v2/histohour"
-    params = {
-        "fsym": symbol,
-        "tsym": currency,
+        "fsym": crypto_symbol.upper(),  
+        "tsym": currency.upper(),
         "limit": limit,
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
     }
+
     try:
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
-        if data.get("Response") == "Success":
-            # Extraire les prix de clôture
+
+        if data["Response"] == "Success":
             prices = [item["close"] for item in data["Data"]["Data"]]
-            logging.debug(f"Prix récupérés pour {symbol}/{currency}: {prices}")
+            logging.debug(f"Prix récupérés pour {crypto_symbol}/{currency}: {prices}")
             return prices
         else:
-            logging.error(f"Erreur dans la réponse de l'API : {data}")
+            logging.error(f"Erreur API pour {crypto_symbol}: {data.get('Message', 'Erreur inconnue')}")
             return None
-    except Exception as e:
-        logging.error(f"Erreur lors de la récupération des données : {e}")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Erreur lors de la récupération des données pour {crypto_symbol}: {e}")
         return None
 
-# Fonction de calcul des indicateurs techniques
+# Calcul des indicateurs techniques
 def calculate_indicators(prices):
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
     sma_short = np.mean(prices[-10:])
     sma_long = np.mean(prices[-20:])
-    ema_short = np.mean(prices[-12:])  # EMA simplifiée
-    ema_long = np.mean(prices[-26:])  # EMA simplifiée
+    ema_short = np.mean(prices[-12:])  
+    ema_long = np.mean(prices[-26:])
     macd = ema_short - ema_long
     atr = np.std(prices[-20:])
     upper_band = sma_short + (2 * atr)
@@ -141,7 +99,7 @@ def calculate_indicators(prices):
         "Lower_Band": lower_band,
     }
 
-# Analyse des signaux
+# Analyse des signaux d'achat/vente
 def analyze_signals(prices):
     indicators = calculate_indicators(prices)
     logging.debug(f"Indicateurs calculés : {indicators}")
@@ -166,14 +124,6 @@ def periodic_price_check(symbol, currency):
         else:
             logging.error("Impossible d'analyser les données, données non disponibles.")
         time.sleep(3600)  # Attendre 1 heure avant la prochaine vérification
-
-# Exemple d'utilisation
-if __name__ == "__main__":
-    # Lancer la vérification pour BTC/USD
-    try:
-        periodic_price_check("BTC", "USD")
-    except KeyboardInterrupt:
-        logging.info("Arrêt manuel du script.")
 
 # Envoi asynchrone d'un message Telegram
 async def send_telegram_message(chat_id, message):
@@ -284,9 +234,8 @@ async def run_flask():
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
-        asyncio.run(send_telegram_message(CHAT_ID, "Test manuel de connexion Telegram : Bot actif."))
-    except Exception as e:
-        logging.error(f"Échec du test manuel Telegram : {e}")
-if __name__ == "__main__":
-    # Démarrage de l'application Flask
-    app.run(debug=True, host="127.0.0.1", port=PORT)
+        asyncio.run(run_flask())
+        asyncio.run(safe_trading_task())
+    except KeyboardInterrupt:
+        logging.info("Exécution interrompue manuellement.")
+        sys.exit(0)
