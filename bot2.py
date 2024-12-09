@@ -57,7 +57,7 @@ def fetch_historical_data(crypto_symbol, interval="hour", limit=50):
     params = {
         "fsym": crypto_symbol.upper(),  # Assurer que le symbole est en majuscule
         "tsym": "USD",
-        "limit": limit,
+        "limit": 50,
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"  # Votre clé API ici
     }
     
