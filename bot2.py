@@ -99,7 +99,7 @@ def fetch_historical_data(symbol, currency, limit=50):
         "fsym": symbol,
         "tsym": currency,
         "limit": limit,
-        "api_key": 70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c
+        "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
     }
     try:
         response = requests.get(url, params=params)
