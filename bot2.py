@@ -194,6 +194,12 @@ async def trading_task():
         log_memory_usage()
         await asyncio.sleep(900)
 
+# Fonction pour surveiller l'utilisation de la mémoire
+def log_memory_usage():
+    current, peak = tracemalloc.get_traced_memory()
+    logging.info(f"Utilisation de la mémoire - Actuelle: {current / 10**6} MB, Pic: {peak / 10**6} MB")
+    tracemalloc.clear_traces()
+
 # Fonction de sécurité pour le trading task
 async def safe_trading_task():
     try:
