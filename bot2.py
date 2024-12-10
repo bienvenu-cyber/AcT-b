@@ -14,7 +14,6 @@ import gc  # Garbage collector pour optimiser la mémoire
 import objgraph  # Pour la détection des fuites de mémoire
 import platform
 import subprocess
-import aiohttp==3.8.1 --only-binary=:all:
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
@@ -126,31 +125,18 @@ def periodic_price_check(symbol, currency):
             logging.error("Impossible d'analyser les données, données non disponibles.")
         time.sleep(3600)  # Attendre 1 heure avant la prochaine vérification
 
-# Fonction asynchrone pour envoyer un message Telegram avec gestion des connexions
+# Envoi asynchrone d'un message Telegram
 async def send_telegram_message(chat_id, message):
     try:
-        # Crée un connecteur avec un plus grand pool de connexions
-        conn = aiohttp.TCPConnector(limit_per_host=100)  # Augmente la limite des connexions simultanées par hôte
-        timeout = aiohttp.ClientTimeout(total=60)  # Définir un délai d'attente de 60 secondes
-
-        # Utiliser aiohttp pour envoyer le message
-        async with aiohttp.ClientSession(connector=conn, timeout=timeout) as session:
-            url = f'https://api.telegram.org/bot{BOT_TOKEN}/sendMessage'
-            data = {'chat_id': chat_id, 'text': message}
-            async with session.post(url, data=data) as response:
-                if response.status == 200:
-                    logging.info(f"Message Telegram envoyé : {message}")
-                else:
-                    logging.error(f"Erreur HTTP: {response.status}")
+        await bot.send_message(chat_id=chat_id, text=message)
+        logging.info(f"Message Telegram envoyé : {message}")
     except Exception as e:
         logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
-
-asyncio.run(main())
 
 # Notification d'erreur en cas d'exception
 async def notify_error(message):
     try:
-        await send_telegram_message(CHAT_ID, message)
+        await bot.send_message(chat_id=CHAT_ID, text=message)
         logging.info(f"Notification d'erreur envoyée : {message}")
     except Exception as e:
         logging.error(f"Erreur lors de l'envoi de la notification d'erreur : {e}")
