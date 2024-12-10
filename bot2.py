@@ -77,42 +77,120 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
         logging.error(f"Erreur lors de la récupération des données pour {crypto_symbol}: {e}")
         return None
 
-# Calcul des indicateurs techniques
+# Fonction de calcul des indicateurs
 def calculate_indicators(prices):
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
-    sma_short = np.mean(prices[-10:])
-    sma_long = np.mean(prices[-20:])
-    ema_short = np.mean(prices[-12:])
-    ema_long = np.mean(prices[-26:])
+    
+    # Moyennes Mobiles (SMA et EMA)
+    sma_short = np.mean(prices[-10:])  # Moyenne mobile simple sur 10 périodes
+    sma_long = np.mean(prices[-20:])   # Moyenne mobile simple sur 20 périodes
+    
+    # Calcul de l'EMA avec une méthode exponentielle correcte
+    def ema(prices, period):
+        multiplier = 2 / (period + 1)
+        ema_values = [np.mean(prices[:period])]
+        for price in prices[period:]:
+            ema_values.append((price - ema_values[-1]) * multiplier + ema_values[-1])
+        return ema_values[-1]
+
+    ema_short = ema(prices[-12:], 12)  # EMA sur 12 périodes
+    ema_long = ema(prices[-26:], 26)   # EMA sur 26 périodes
+    
+    # MACD : Différence entre les EMA à court terme et à long terme
     macd = ema_short - ema_long
-    atr = np.std(prices[-20:])
-    upper_band = sma_short + (2 * atr)
-    lower_band = sma_short - (2 * atr)
-    logging.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, MACD={macd}, ATR={atr}, Upper_Band={upper_band}, Lower_Band={lower_band}")
+    
+    # ATR (Average True Range) pour la volatilité
+    high_prices = np.array(prices[-20:])  # Plages hautes
+    low_prices = np.array(prices[-20:])   # Plages basses
+    close_prices = np.array(prices[-20:]) # Clôtures
+    tr = np.maximum(high_prices - low_prices, 
+                    np.maximum(abs(high_prices - close_prices[1:]), abs(low_prices - close_prices[:-1])))
+    atr = np.mean(tr)  # ATR sur 20 périodes
+    
+    # Bandes de Bollinger : Calculées en fonction de la SMA et de l'ATR
+    upper_band = sma_short + (2 * atr)  # Bande supérieure
+    lower_band = sma_short - (2 * atr)  # Bande inférieure
+    
+    # RSI (Relative Strength Index) sur 14 périodes
+    gains = [prices[i] - prices[i-1] for i in range(1, 14) if prices[i] > prices[i-1]]
+    losses = [prices[i-1] - prices[i] for i in range(1, 14) if prices[i] < prices[i-1]]
+    average_gain = np.mean(gains) if gains else 0
+    average_loss = np.mean(losses) if losses else 0
+    rs = average_gain / average_loss if average_loss != 0 else 0
+    rsi = 100 - (100 / (1 + rs))
+    
+    # Stochastique : Calculs classiques avec %K et %D
+    lowest_low = min(prices[-14:])
+    highest_high = max(prices[-14:])
+    stochastic_k = ((prices[-1] - lowest_low) / (highest_high - lowest_low)) * 100 if highest_high != lowest_low else 0
+    
+    # Calcul du %D (moyenne mobile de %K sur 3 périodes)
+    if len(prices) >= 17:  # Il faut au moins 17 données pour calculer le %D
+        stochastic_d = np.mean([((prices[i] - min(prices[i-14:i])) / (max(prices[i-14:i]) - min(prices[i-14:i]))) * 100 for i in range(-3, 0)])
+    else:
+        stochastic_d = stochastic_k  # Si pas assez de données, utiliser %K
+    
+    logging.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd}, ATR={atr}, Upper_Band={upper_band}, Lower_Band={lower_band}, RSI={rsi}, Stochastic_K={stochastic_k}, Stochastic_D={stochastic_d}")
+    
     return {
         "SMA_short": sma_short,
         "SMA_long": sma_long,
+        "EMA_short": ema_short,
+        "EMA_long": ema_long,
         "MACD": macd,
         "ATR": atr,
         "Upper_Band": upper_band,
         "Lower_Band": lower_band,
+        "RSI": rsi,
+        "Stochastic_K": stochastic_k,
+        "Stochastic_D": stochastic_d,
     }
 
-# Analyse des signaux d'achat/vente
-def analyze_signals(prices):
-    indicators = calculate_indicators(prices)
-    logging.debug(f"Indicateurs calculés : {indicators}")
+# Fonction de calcul du Stop Loss et Take Profit
+def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
+    """
+    Calcule le Stop Loss (SL) et Take Profit (TP) en fonction du prix d'entrée.
+    Le SL est défini à 2% du prix d'entrée, le TP à 5%.
+    """
+    # Calcul du Stop Loss et Take Profit en pourcentage du prix d'entrée
+    sl_price = entry_price - (sl_percent * entry_price)  # Stop Loss à 2% en dessous du prix d'entrée
+    tp_price = entry_price + (tp_percent * entry_price)  # Take Profit à 5% au-dessus du prix d'entrée
 
-    if prices[-1] > indicators["Upper_Band"]:
-        logging.info("Signal de vente généré.")
-        return "SELL", indicators
-    elif prices[-1] < indicators["Lower_Band"]:
-        logging.info("Signal d'achat généré.")
-        return "BUY", indicators
+    # Retourner les prix calculés
+    logging.debug(f"Stop Loss calculé à : {sl_price}, Take Profit calculé à : {tp_price} (Prix d'entrée : {entry_price})")
+
+    return sl_price, tp_price
+
+# Fonction de décision d'achat/vente basée sur les indicateurs
+def decision(prices):
+    indicators = calculate_indicators(prices)
     
-    logging.info("Aucun signal détecté.")
-    return "HOLD", indicators
+    # Logique de décision d'achat/vente (exemple simplifié)
+    if indicators['RSI'] < 30 and indicators['Stochastic_K'] < 20:
+        decision = "Acheter"  # Condition de survente
+    elif indicators['RSI'] > 70 and indicators['Stochastic_K'] > 80:
+        decision = "Vendre"   # Condition de surachat
+    elif indicators['MACD'] > 0 and indicators['EMA_short'] > indicators['EMA_long']:
+        decision = "Acheter"  # Signal de tendance haussière
+    elif indicators['MACD'] < 0 and indicators['EMA_short'] < indicators['EMA_long']:
+        decision = "Vendre"   # Signal de tendance baissière
+    else:
+        decision = "Neutre"   # Pas de signal clair
+    
+    # Exemple de calcul du SL et TP pour une décision d'achat ou de vente
+    if decision == "Acheter":
+        entry_price = prices[-1]  # Dernier prix de clôture
+        sl, tp = calculate_sl_tp(entry_price)
+        logging.info(f"Décision de trading : {decision} (SL={sl}, TP={tp})")
+    elif decision == "Vendre":
+        entry_price = prices[-1]  # Dernier prix de clôture
+        sl, tp = calculate_sl_tp(entry_price)
+        logging.info(f"Décision de trading : {decision} (SL={sl}, TP={tp})")
+    
+    logging.info(f"Décision de trading : {decision} (RSI={indicators['RSI']}, Stochastic_K={indicators['Stochastic_K']}, MACD={indicators['MACD']}, EMA_short={indicators['EMA_short']}, EMA_long={indicators['EMA_long']})")
+    
+    return decision
 
 # Fonction principale de vérification périodique
 def periodic_price_check(symbol, currency):
