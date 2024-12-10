@@ -37,7 +37,7 @@ bot = Bot(token=TELEGRAM_TOKEN)
 app = Flask(__name__)
 
 # Constantes
-CRYPTO_LIST = ["BTC", "ADA"]
+CRYPTO_LIST = ["BTC", "ETH"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -227,14 +227,6 @@ def log_signal(signal, indicators, prices):
     
     logging.debug(f"Signal logué : {signal} à {prices[-1]}")
         
-        # Analyser les fuites de mémoire
-        objgraph.show_most_common_types(limit=10)
-        gc.collect()
-        
-    except Exception as e:
-        logging.error(f"Erreur lors de l'analyse de {crypto_id} : {e}")
-        await notify_error(f"Erreur détectée dans le bot pour {crypto_id}: {e}")
-
 # Tâche périodique
 async def trading_task():
     while True:
@@ -277,16 +269,25 @@ def log_performance():
 # Ajout du gestionnaire de signaux
 signal.signal(signal.SIGTERM, handle_shutdown_signal)
 
+from flask import Flask, jsonify
+from threading import Thread
+
+app = Flask(__name__)
+
 # Route Flask
 @app.route("/")
 def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
-# Lancer Flask sur un thread séparé
-async def run_flask():
-    from threading import Thread
-    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
+# Fonction pour lancer Flask dans un thread séparé
+def run_flask():
+    app.run(host='0.0.0.0', port=PORT, threaded=True, use_reloader=False)
 
+# Lancer Flask sur un thread séparé
+if __name__ == "__main__":
+    thread = Thread(target=run_flask)
+    thread.start()
+    
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
