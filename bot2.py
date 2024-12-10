@@ -180,6 +180,18 @@ def analyze_signals(prices):
 
     logging.debug(f"Décision d'action : {decision}")
     return decision
+    # Exemple pour récupérer les prix réels
+prices = {
+ RSI': get_crypto_prices(),  # Utilisez vos méthodes pour calculer le RSI
+    'Stochastic_K': get_crypto_prices(),  # Idem pour Stochastic_K
+    'MACD': get_crypto_prices(),  # Idem pour MACD
+    'EMA_short': get_crypto_prices(),  # Idem pour EMA_short
+    'EMA_long': get_crypto_prices()   # Idem pour EMA_long
+}
+
+# Appeler la fonction analyze_signals avec la variable prices définie
+decision = analyze_signals(prices)
+print(decision)  # Affichera la décision d'achat/vente
 
 # Fonction principale de vérification périodique
 def periodic_price_check(symbol, currency):
