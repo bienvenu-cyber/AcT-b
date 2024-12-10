@@ -44,7 +44,7 @@ PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
 # Récupération des données historiques pour les cryptomonnaies
-def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=50):
+def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=300):
     base_url = "https://min-api.cryptocompare.com/data/v2/"
     if interval == "hour":
         endpoint = "histohour"
@@ -147,7 +147,7 @@ def calculate_indicators(prices):
         "Stochastic_D": stochastic_d,
     }
 
-# Analyse des signaux d'achat/vente
+# Calcul du Stop Loss et Take Profit en pourcentage du prix d'entrée
 def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
     """
     Calcule le Stop Loss (SL) et Take Profit (TP) en fonction du prix d'entrée.
@@ -163,7 +163,7 @@ def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
     return sl_price, tp_price
 
 # Fonction de décision d'achat/vente basée sur les indicateurs
-def decision(prices):
+def analyze_signals(prices):
     indicators = calculate_indicators(prices)
     
     # Logique de décision d'achat/vente (exemple simplifié)
@@ -201,7 +201,7 @@ def periodic_price_check(symbol, currency):
             logging.info(f"Signal généré pour {symbol}/{currency}: {signal}")
         else:
             logging.error("Impossible d'analyser les données, données non disponibles.")
-        time.sleep(3600)  # Attendre 1 heure avant la prochaine vérification
+        time.sleep(900)  # Attendre 15 minutes  avant la prochaine vérification
 
 # Envoi asynchrone d'un message Telegram
 async def send_telegram_message(chat_id, message):
