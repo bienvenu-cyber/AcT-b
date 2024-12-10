@@ -14,7 +14,7 @@ import gc  # Garbage collector pour optimiser la mémoire
 import objgraph  # Pour la détection des fuites de mémoire
 import platform
 import subprocess
-import aiohttp==3.8.1
+import aiohttp==3.8.1 --only-binary=:all:
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
