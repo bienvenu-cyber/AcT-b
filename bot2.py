@@ -279,15 +279,11 @@ app = Flask(__name__)
 def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
-# Fonction pour lancer Flask dans un thread séparé
-def run_flask():
-    app.run(host='0.0.0.0', port=PORT, threaded=True, use_reloader=False)
-
 # Lancer Flask sur un thread séparé
-if __name__ == "__main__":
-    thread = Thread(target=run_flask)
-    thread.start()
-    
+async def run_flask():
+    from threading import Thread
+    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
+
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
