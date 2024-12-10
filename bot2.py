@@ -147,7 +147,7 @@ def calculate_indicators(prices):
         "Stochastic_D": stochastic_d,
     }
 
-# Fonction de calcul du Stop Loss et Take Profit
+# Analyse des signaux d'achat/vente
 def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
     """
     Calcule le Stop Loss (SL) et Take Profit (TP) en fonction du prix d'entrée.
