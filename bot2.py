@@ -231,7 +231,7 @@ def log_signal(signal, indicators, prices):
 async def trading_task():
     while True:
         logging.info("Début d'une nouvelle itération de trading.")
-        tasks = [analyze_crypto(crypto) for crypto in CRYPTO_LIST]
+        tasks = [analyze_signals(prices) for crypto in CRYPTO_LIST]
         await asyncio.gather(*tasks)
         log_memory_usage()
         await asyncio.sleep(900)
