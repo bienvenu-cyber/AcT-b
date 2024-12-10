@@ -14,7 +14,7 @@ import gc  # Garbage collector pour optimiser la mémoire
 import objgraph  # Pour la détection des fuites de mémoire
 import platform
 import subprocess
-
+import talib
 # Activer la surveillance de la mémoire
 tracemalloc.start()
 
@@ -43,16 +43,21 @@ CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
+logging.basicConfig(level=logging.DEBUG)
 # Récupération des données historiques pour les cryptomonnaies
-def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=300):
+def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=2000):
     base_url = "https://min-api.cryptocompare.com/data/v2/"
-    if interval == "hour":
+    
+    # Déterminer le bon endpoint en fonction de l'intervalle
+    if interval == "minute":
+        endpoint = "histominute"
+    elif interval == "hour":
         endpoint = "histohour"
     elif interval == "day":
         endpoint = "histoday"
     else:
-        raise ValueError("Intervalle non supporté. Utilisez 'hour' ou 'day'.")
-
+        raise ValueError("Intervalle non supporté. Utilisez 'minute', 'hour' ou 'day'.")
+    
     url = f"{base_url}{endpoint}"
     params = {
         "fsym": crypto_symbol.upper(),
@@ -62,13 +67,36 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
     }
 
     try:
+        # Faire la requête
         response = requests.get(url, params=params)
         response.raise_for_status()
         data = response.json()
 
-        if data["Response"] == "Success":
-            prices = [item["close"] for item in data["Data"]["Data"]]
-            logging.debug(f"Prix récupérés pour {crypto_symbol}/{currency}: {prices}")
+        # Vérification de la réponse de l'API
+        if data["Response"] == "Success" and "Data" in data and "Data" in data["Data"]:
+            prices = [{
+                "time": item["time"],
+                "open": item["open"],
+                "high": item["high"],
+                "low": item["low"],
+                "close": item["close"],
+                "volume": item["volumeto"]
+            } for item in data["Data"]["Data"]]
+            
+            # Conversion en arrays NumPy pour TA-Lib
+            opens = np.array([item["open"] for item in prices])
+            highs = np.array([item["high"] for item in prices])
+            lows = np.array([item["low"] for item in prices])
+            closes = np.array([item["close"] for item in prices])
+            volumes = np.array([item["volume"] for item in prices])
+
+            # Exemple d'utilisation de TA-Lib pour le calcul de l'Indicateur Technique
+            # Calcul de la moyenne mobile simple (SMA) sur 50 périodes
+            sma = talib.SMA(closes, timeperiod=50)
+            logging.debug(f"SMA calculée: {sma[-5:]}")  # Affichage des 5 derniers SMA calculés
+            
+            # Vous pouvez calculer d'autres indicateurs techniques ici (RSI, MACD, etc.)
+            
             return prices
         else:
             logging.error(f"Erreur API pour {crypto_symbol}: {data.get('Message', 'Erreur inconnue')}")
@@ -77,74 +105,51 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
         logging.error(f"Erreur lors de la récupération des données pour {crypto_symbol}: {e}")
         return None
 
-# Fonction de calcul des indicateurs
+# Fonction de calcul des indicateurs avec TA-Lib
 def calculate_indicators(prices):
     if len(prices) < 26:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
     
-    # Moyennes Mobiles (SMA et EMA)
-    sma_short = np.mean(prices[-10:])  # Moyenne mobile simple sur 10 périodes
-    sma_long = np.mean(prices[-20:])   # Moyenne mobile simple sur 20 périodes
+    # Convertir les prix en tableau numpy pour TA-Lib
+    prices_array = np.array(prices)
     
-    # Calcul de l'EMA avec une méthode exponentielle correcte
-    def ema(prices, period):
-        multiplier = 2 / (period + 1)
-        ema_values = [np.mean(prices[:period])]
-        for price in prices[period:]:
-            ema_values.append((price - ema_values[-1]) * multiplier + ema_values[-1])
-        return ema_values[-1]
-
-    ema_short = ema(prices[-12:], 12)  # EMA sur 12 périodes
-    ema_long = ema(prices[-26:], 26)   # EMA sur 26 périodes
+    # Moyennes Mobiles (SMA et EMA)
+    sma_short = talib.SMA(prices_array, timeperiod=10)[-1]  # SMA sur 10 périodes
+    sma_long = talib.SMA(prices_array, timeperiod=20)[-1]   # SMA sur 20 périodes
+    
+    # EMA
+    ema_short = talib.EMA(prices_array, timeperiod=12)[-1]  # EMA sur 12 périodes
+    ema_long = talib.EMA(prices_array, timeperiod=26)[-1]   # EMA sur 26 périodes
     
     # MACD : Différence entre les EMA à court terme et à long terme
-    macd = ema_short - ema_long
+    macd, macd_signal, macd_hist = talib.MACD(prices_array, fastperiod=12, slowperiod=26, signalperiod=9)
     
     # ATR (Average True Range) pour la volatilité
-    high_prices = np.array(prices[-20:])  # Plages hautes
-    low_prices = np.array(prices[-20:])   # Plages basses
-    close_prices = np.array(prices[-20:]) # Clôtures
-    tr = np.maximum(high_prices - low_prices, 
-                    np.maximum(abs(high_prices - close_prices[1:]), abs(low_prices - close_prices[:-1])))
-    atr = np.mean(tr)  # ATR sur 20 périodes
+    atr = talib.ATR(prices_array, prices_array, prices_array, timeperiod=14)[-1]  # ATR sur 14 périodes
     
     # Bandes de Bollinger : Calculées en fonction de la SMA et de l'ATR
-    upper_band = sma_short + (2 * atr)  # Bande supérieure
-    lower_band = sma_short - (2 * atr)  # Bande inférieure
+    upper_band, middle_band, lower_band = talib.BBANDS(prices_array, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
     
     # RSI (Relative Strength Index) sur 14 périodes
-    gains = [prices[i] - prices[i-1] for i in range(1, 14) if prices[i] > prices[i-1]]
-    losses = [prices[i-1] - prices[i] for i in range(1, 14) if prices[i] < prices[i-1]]
-    average_gain = np.mean(gains) if gains else 0
-    average_loss = np.mean(losses) if losses else 0
-    rs = average_gain / average_loss if average_loss != 0 else 0
-    rsi = 100 - (100 / (1 + rs))
+    rsi = talib.RSI(prices_array, timeperiod=14)[-1]
     
     # Stochastique : Calculs classiques avec %K et %D
-    lowest_low = min(prices[-14:])
-    highest_high = max(prices[-14:])
-    stochastic_k = ((prices[-1] - lowest_low) / (highest_high - lowest_low)) * 100 if highest_high != lowest_low else 0
+    slowk, slowd = talib.STOCH(prices_array, prices_array, prices_array, fastk_period=14, slowk_period=3, slowd_period=3)
     
-    # Calcul du %D (moyenne mobile de %K sur 3 périodes)
-    if len(prices) >= 17:  # Il faut au moins 17 données pour calculer le %D
-        stochastic_d = np.mean([((prices[i] - min(prices[i-14:i])) / (max(prices[i-14:i]) - min(prices[i-14:i]))) * 100 for i in range(-3, 0)])
-    else:
-        stochastic_d = stochastic_k  # Si pas assez de données, utiliser %K
-    
-    logging.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd}, ATR={atr}, Upper_Band={upper_band}, Lower_Band={lower_band}, RSI={rsi}, Stochastic_K={stochastic_k}, Stochastic_D={stochastic_d}")
+    logging.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}")
     
     return {
         "SMA_short": sma_short,
         "SMA_long": sma_long,
         "EMA_short": ema_short,
         "EMA_long": ema_long,
-        "MACD": macd,
+        "MACD": macd[-1],
         "ATR": atr,
-        "Upper_Band": upper_band,
-        "Lower_Band": lower_band,
+        "Upper_Band": upper_band[-1],
+        "Lower_Band": lower_band[-1],
         "RSI": rsi,
-        "Stochastic_K": stochastic_k,
-        "Stochastic_D": stochastic_d,
+        "Stochastic_K": slowk[-1],
+        "Stochastic_D": slowd[-1],
     }
 
 # Calcul du Stop Loss et Take Profit en pourcentage du prix d'entrée
@@ -180,14 +185,13 @@ def analyze_signals(prices):
 
     logging.debug(f"Décision d'action : {decision}")
     return decision
-    # Exemple pour récupérer les prix réels
-prices = {
- RSI': get_crypto_prices(),  # Utilisez vos méthodes pour calculer le RSI
-    'Stochastic_K': get_crypto_prices(),  # Idem pour Stochastic_K
-    'MACD': get_crypto_prices(),  # Idem pour MACD
-    'EMA_short': get_crypto_prices(),  # Idem pour EMA_short
-    'EMA_long': get_crypto_prices()   # Idem pour EMA_long
-}
+
+# Exemple pour récupérer les prix réels (exemple fictif, remplacer par vos méthodes réelles)
+prices = get_crypto_prices()  # Remplacer par votre méthode pour obtenir les prix du marché
+
+# Appel de la fonction d'analyse
+signal = analyze_signals(prices)
+print(signal)
 
 # Appeler la fonction analyze_signals avec la variable prices définie
 decision = analyze_signals(prices)
