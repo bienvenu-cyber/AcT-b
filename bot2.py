@@ -172,24 +172,13 @@ def analyze_signals(prices):
     elif indicators['RSI'] > 70 and indicators['Stochastic_K'] > 80:
         decision = "Vendre"   # Condition de surachat
     elif indicators['MACD'] > 0 and indicators['EMA_short'] > indicators['EMA_long']:
-        decision = "Acheter"  # Signal de tendance haussière
+        decision = "Acheter"  # Si le MACD est positif et l'EMA court terme est au-dessus de l'EMA long terme
     elif indicators['MACD'] < 0 and indicators['EMA_short'] < indicators['EMA_long']:
-        decision = "Vendre"   # Signal de tendance baissière
+        decision = "Vendre"   # Si le MACD est négatif et l'EMA court terme est en dessous de l'EMA long terme
     else:
-        decision = "Neutre"   # Pas de signal clair
-    
-    # Exemple de calcul du SL et TP pour une décision d'achat ou de vente
-    if decision == "Acheter":
-        entry_price = prices[-1]  # Dernier prix de clôture
-        sl, tp = calculate_sl_tp(entry_price)
-        logging.info(f"Décision de trading : {decision} (SL={sl}, TP={tp})")
-    elif decision == "Vendre":
-        entry_price = prices[-1]  # Dernier prix de clôture
-        sl, tp = calculate_sl_tp(entry_price)
-        logging.info(f"Décision de trading : {decision} (SL={sl}, TP={tp})")
-    
-    logging.info(f"Décision de trading : {decision} (RSI={indicators['RSI']}, Stochastic_K={indicators['Stochastic_K']}, MACD={indicators['MACD']}, EMA_short={indicators['EMA_short']}, EMA_long={indicators['EMA_long']})")
-    
+        decision = "Ne rien faire"  # Aucune condition claire d'achat ou de vente
+
+    logging.debug(f"Décision d'action : {decision}")
     return decision
 
 # Fonction principale de vérification périodique
@@ -237,23 +226,6 @@ def log_signal(signal, indicators, prices):
         df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
     
     logging.debug(f"Signal logué : {signal} à {prices[-1]}")
-
-# Fonction pour analyser une cryptomonnaie
-async def analyze_crypto(crypto_id):
-    try:
-        logging.debug(f"Début de l'analyse pour {crypto_id}.")
-        prices = fetch_historical_data(crypto_id)
-        
-        if prices is None or len(prices) < 20:
-            logging.warning(f"Données insuffisantes pour {crypto_id}.")
-            await notify_error(f"Données insuffisantes pour {crypto_id}.")
-            return
-        
-        signal, indicators = analyze_signals(prices)
-        logging.debug(f"Signal généré pour {crypto_id}: {signal} à {prices[-1]:.2f}")
-        
-        log_signal(signal, indicators, prices)
-        await send_telegram_message(CHAT_ID, f"{crypto_id.upper()} Signal: {signal} à {prices[-1]:.2f}")
         
         # Analyser les fuites de mémoire
         objgraph.show_most_common_types(limit=10)
