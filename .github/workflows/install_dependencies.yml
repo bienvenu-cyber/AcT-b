@@ -19,16 +19,14 @@ jobs:
         python-version: 3.11  # Utilisation de Python 3.11
 
     - name: Install system dependencies for TA-Lib
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential python3-dev libatlas-base-dev
-        # Tentative d'installation de libta-lib-dev
-        sudo apt-get install -y libta-lib-dev || true  # Ignore error if not found
-        # Essayer d'installer TA-Lib via pip si les dépendances système échouent
-        if ! dpkg -s libta-lib-dev; then
-          echo "libta-lib-dev not found, installing TA-Lib via pip"
-          pip install TA-Lib  # Installer directement via pip
-        fi
+  run: |
+    sudo apt-get update
+    sudo apt-get install -y build-essential python3-dev libatlas-base-dev
+    sudo apt-get install -y libta-lib-dev || true  # Ignore error if not found
+    if ! dpkg -s libta-lib-dev; then
+      echo "libta-lib-dev not found, installing TA-Lib via pip"
+      pip install TA-Lib  # Installer directement via pip
+    fi
 
     - name: Upgrade pip to the latest version
       run: |
