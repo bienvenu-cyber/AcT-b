@@ -16,12 +16,12 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: 3.11  # Utilisation de Python 3.11
+        python-version: 3.10  # Utilisation de Python 3.10 (rétrogradé)
 
     - name: Install system dependencies for TA-Lib
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential python3.11-dev libatlas-base-dev libta-lib0 libta-lib-dev  # Install Python development headers
+        sudo apt-get install -y build-essential python3.10-dev libatlas-base-dev libta-lib0 libta-lib-dev  # Install Python 3.10 development headers
 
     - name: Upgrade pip to the latest version
       run: |
