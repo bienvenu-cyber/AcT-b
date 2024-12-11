@@ -16,13 +16,12 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: 3.10  # Utilisation de Python 3.10
+        python-version: 3.9  # Utilisation de Python 3.9
 
     - name: Install system dependencies for TA-Lib
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential python3-dev libatlas-base-dev libta-lib0 libta-lib-dev libpython3.10-dev
-        sudo apt-get install -y libatlas-base-dev libta-lib-dev  # S'assurer d'avoir les bonnes versions des dépendances
+        sudo apt-get install -y build-essential python3-dev libatlas-base-dev libta-lib0 libta-lib-dev
 
     - name: Upgrade pip to the latest version
       run: |
@@ -31,7 +30,7 @@ jobs:
     - name: Install Python dependencies
       run: |
         pip install -r requirements.txt  # Installer les dépendances Python listées dans requirements.txt
-        pip install TA-Lib==0.4.17  # Installer une version stable de TA-Lib
+        pip install TA-Lib  # Installer TA-Lib avec pip
 
     - name: Run tests
       run: |
