@@ -1,4 +1,4 @@
-name: Install Dependencies and Build
+name: Build and Install Dependencies
 
 on:
   push:
@@ -8,34 +8,21 @@ on:
 jobs:
   install_dependencies:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout the repository
-      uses: actions/checkout@v2  # Checkout du code du dépôt
+      - name: Checkout code from repository
+        uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.11  # Utilisation de Python 3.11
+      - name: Set up Python 3.x
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
 
-    - name: Install system dependencies for TA-Lib
-  run: |
-    sudo apt-get update
-    sudo apt-get install -y build-essential python3-dev libatlas-base-dev
-    sudo apt-get install -y libta-lib-dev || true  # Ignore error if not found
-    if ! dpkg -s libta-lib-dev; then
-      echo "libta-lib-dev not found, installing TA-Lib via pip"
-      pip install TA-Lib  # Installer directement via pip
-    fi
+      - name: Install system dependencies for TA-Lib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev libatlas-base-dev libta-lib-dev
 
-    - name: Upgrade pip to the latest version
-      run: |
-        pip install --upgrade pip  # Met à jour pip
-
-    - name: Install Python dependencies
-      run: |
-        pip install -r requirements.txt  # Installer les dépendances Python listées dans requirements.txt
-
-    - name: Run tests
-      run: |
-        python -m unittest discover  # Exemple de test pour vérifier si tout fonctionne
+      - name: Install Python dependencies from requirements.txt
+        run: |
+          pip install -r requirements.txt
