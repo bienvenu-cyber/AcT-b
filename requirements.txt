@@ -17,3 +17,6 @@ joblib==1.3.2
 objgraph==3.3.0
 psutil==5.9.4
 TA-Lib==0.4.19
+pytest
+flake8
+black
