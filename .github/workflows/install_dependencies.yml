@@ -8,30 +8,30 @@ on:
 jobs:
   install_dependencies:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout the repository
-      uses: actions/checkout@v2  # Checkout du code du dépôt
+      - name: Checkout the repository
+        uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.11  # Utilisation de Python 3.11
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.11
 
-    - name: Install system dependencies for TA-Lib
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential python3-dev libatlas-base-dev libta-lib0 libta-lib-dev
+      - name: Install system dependencies for TA-Lib
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev libatlas-base-dev libta-lib0 libta-lib-dev python3.11-dev  # Ajout de python3.11-dev
 
-    - name: Upgrade pip to the latest version
-      run: |
-        pip install --upgrade pip  # Met à jour pip
+      - name: Upgrade pip to the latest version
+        run: |
+          pip install --upgrade pip
 
-    - name: Install Python dependencies
-      run: |
-        pip install -r requirements.txt  # Installer les dépendances Python listées dans requirements.txt
-        pip install TA-Lib  # Installer TA-Lib avec pip
+      - name: Install Python dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install TA-Lib
 
-    - name: Run tests
-      run: |
-        python -m unittest discover  # Exemple de test pour vérifier si tout fonctionne
+      - name: Run tests
+        run: |
+          python -m unittest discover
