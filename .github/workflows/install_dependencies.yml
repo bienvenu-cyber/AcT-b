@@ -18,10 +18,10 @@ jobs:
       with:
         python-version: 3.11  # Utilisation de Python 3.11
 
-    - name: Install system dependencies for Python 3.11 and TA-Lib
+    - name: Install system dependencies for TA-Lib
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential python3.11-dev libpython3.11-dev libatlas-base-dev libta-lib0 libta-lib-dev  # Installation de toutes les dépendances nécessaires
+        sudo apt-get install -y build-essential python3.11-dev libatlas-base-dev libta-lib0 libta-lib-dev  # Install Python development headers
 
     - name: Upgrade pip to the latest version
       run: |
@@ -30,7 +30,7 @@ jobs:
     - name: Install Python dependencies
       run: |
         pip install -r requirements.txt  # Installer les dépendances Python listées dans requirements.txt
-        pip install TA-Lib==0.4.17  # Installer une version stable de TA-Lib pour éviter les problèmes de compilation
+        pip install TA-Lib==0.4.17  # Installer une version stable de TA-Lib
 
     - name: Run tests
       run: |
