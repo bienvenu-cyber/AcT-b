@@ -1,5 +1,15 @@
-# Utilise une image de base Python
+# Utiliser une image de base Python
 FROM python:3.11-slim
+
+# Mettre à jour pip
+RUN pip install --upgrade pip
+
+# Installer les dépendances système nécessaires (comme pour TA-Lib)
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libta-lib0-dev \
+    ta-lib \
+    && rm -rf /var/lib/apt/lists/*
 
 # Définir le répertoire de travail
 WORKDIR /app
