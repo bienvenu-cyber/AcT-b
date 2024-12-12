@@ -65,7 +65,7 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
         "limit": limit,
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
     }
-
+    
     try:
         # Faire la requête
         response = requests.get(url, params=params)
@@ -186,9 +186,6 @@ def analyze_signals(prices):
     logging.debug(f"Décision d'action : {decision}")
     return decision
 
-# Exemple pour récupérer les prix réels (exemple fictif, remplacer par vos méthodes réelles)
-prices = get_crypto_prices()  # Remplacer par votre méthode pour obtenir les prix du marché
-
 # Appel de la fonction d'analyse
 signal = analyze_signals(prices)
 print(signal)
@@ -237,9 +234,10 @@ def log_signal(signal, indicators, prices):
     }])
     
     if not os.path.exists(SIGNAL_LOG):
-        df.to_csv(SIGNAL_LOG, index=False)
-    else:
-        df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
+        if df.empty:  # Vérifie si le DataFrame est vide
+    df.to_csv(SIGNAL_LOG, index=False)
+else:
+    df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
     
     logging.debug(f"Signal logué : {signal} à {prices[-1]}")
         
@@ -296,7 +294,7 @@ def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
 # Lancer Flask sur un thread séparé
-async def run_flask():
+    def run_flask():
     from threading import Thread
     Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
 
