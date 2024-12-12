@@ -12,7 +12,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Installer les dépendances nécessaires et compiler TA-Lib
+    # Installer TA-Lib au niveau système
     - name: Install TA-Lib manually
       run: |
         sudo apt-get update
@@ -28,12 +28,12 @@ jobs:
     - name: Verify TA-Lib installation
       run: ldconfig -p | grep -i ta_lib
 
-    # Mettre à jour pip et installer les dépendances Python
+    # Installer les dépendances Python
     - name: Install Python dependencies
       run: |
         pip install --upgrade pip
         pip install -r requirements.txt
 
-    # Exécuter le bot
+    # Lancer le bot
     - name: Run your bot
       run: gunicorn -w 4 -b 0.0.0.0:$PORT --keep-alive 120 --log-level debug bot2:app
