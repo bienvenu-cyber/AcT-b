@@ -12,28 +12,18 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Installer la bibliothèque TA-Lib au niveau système
-    - name: Install TA-Lib system library
+    - name: Install Miniconda
       run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc make wget
-        wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz
-        tar -xvzf ta-lib-0.4.0-src.tar.gz
-        cd ta-lib
-        ./configure --prefix=/usr
-        make
-        sudo make install
+        wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+        bash Miniconda3-latest-Linux-x86_64.sh -b
+        export PATH="$HOME/miniconda3/bin:$PATH"
 
-    # Vérifier si TA-Lib est installé correctement
-    - name: Verify TA-Lib installation
-      run: ldconfig -p | grep -i ta_lib
-
-    # Installer les dépendances Python
-    - name: Install Python dependencies
+    - name: Create conda environment and install dependencies
       run: |
-        pip install --upgrade pip
+        conda create --name trading-bot python=3.11 -y
+        conda activate trading-bot
+        conda install -c conda-forge ta-lib
         pip install -r requirements.txt
 
-    # Démarrer le bot
     - name: Run your bot
       run: gunicorn -w 4 -b 0.0.0.0:$PORT --keep-alive 120 --log-level debug bot2:app
