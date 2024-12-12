@@ -4,10 +4,11 @@ FROM python:3.11-slim
 # Mettre à jour pip
 RUN pip install --upgrade pip
 
-# Installer les dépendances système nécessaires (pour compiler TA-Lib à partir des sources)
+# Installer les dépendances système nécessaires (pour compiler TA-Lib et psycopg2)
 RUN apt-get update && apt-get install -y \
     build-essential \
     wget \
+    libpq-dev \  # Ajouté pour pg_config (requis pour psycopg2)
     && rm -rf /var/lib/apt/lists/*
 
 # Télécharger et installer TA-Lib à partir des sources
