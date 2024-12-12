@@ -31,7 +31,7 @@ COPY requirements.txt /app/requirements.txt
 COPY bot2.py /app/bot2.py
 
 # Ajouter les variables d'environnement (TOKEN et CHAT_ID)
-ENV TOKEN=8052620219:AAEnP3ksiFUV3dEPf7Fpzyu3W_-Kg4jfXQ0
+ENV TELEGRAM_TOKEN=8052620219:AAEnP3ksiFUV3dEPf7Fpzyu3W_-Kg4jfXQ0
 ENV CHAT_ID=1963161645
 
 # Installer les dépendances Python
