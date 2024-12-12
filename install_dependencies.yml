@@ -1,4 +1,4 @@
-name: Install Dependencies and Build
+name: CI Workflow
 
 on:
   push:
@@ -6,28 +6,19 @@ on:
       - main
 
 jobs:
-  install_dependencies:
+  build:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout the repository
-      uses: actions/checkout@v2  # Checkout du code du dépôt
-      
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: 3.x  # Définir la version de Python que vous utilisez
-    
-    - name: Install system dependencies for TA-Lib
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Install TA-Lib library
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential python3-dev libatlas-base-dev libta-lib0 libta-lib-dev
-    
+        sudo apt-get install -y build-essential libta-lib0-dev ta-lib
+
     - name: Install Python dependencies
-      run: |
-        pip install -r requirements.txt  # Installer les dépendances Python listées dans requirements.txt
-        pip install TA-Lib  # Installer la bibliothèque TA-Lib
-    
-    - name: Run tests
-      run: |
-        python -m unittest discover  # Exemple de test pour vérifier si tout fonctionne
+      run: pip install -r requirements.txt
+
+    - name: Run your bot
+      run: python your_script.py
