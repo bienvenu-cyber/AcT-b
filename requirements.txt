@@ -19,3 +19,4 @@ TA-Lib
 pytest
 flake8
 black
+tensorflow
