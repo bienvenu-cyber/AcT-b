@@ -12,8 +12,8 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    # Installer TA-Lib au niveau système
-    - name: Install TA-Lib manually
+    # Installer la bibliothèque TA-Lib au niveau système
+    - name: Install TA-Lib system library
       run: |
         sudo apt-get update
         sudo apt-get install -y gcc make wget
@@ -34,6 +34,6 @@ jobs:
         pip install --upgrade pip
         pip install -r requirements.txt
 
-    # Lancer le bot
+    # Démarrer le bot
     - name: Run your bot
       run: gunicorn -w 4 -b 0.0.0.0:$PORT --keep-alive 120 --log-level debug bot2:app
