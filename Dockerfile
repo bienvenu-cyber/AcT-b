@@ -4,12 +4,21 @@ FROM python:3.11-slim
 # Mettre à jour pip
 RUN pip install --upgrade pip
 
-# Installer les dépendances système nécessaires (comme pour TA-Lib)
+# Installer les dépendances système nécessaires (pour compiler TA-Lib à partir des sources)
 RUN apt-get update && apt-get install -y \
     build-essential \
-    libta-lib0-dev \
-    ta-lib \
+    wget \
     && rm -rf /var/lib/apt/lists/*
+
+# Télécharger et installer TA-Lib à partir des sources
+RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
+    tar -xzvf ta-lib-0.4.0-src.tar.gz && \
+    cd ta-lib && \
+    ./configure --prefix=/usr && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
 # Définir le répertoire de travail
 WORKDIR /app
@@ -22,7 +31,7 @@ COPY bot2.py /app/bot2.py
 ENV TOKEN=8052620219:AAEnP3ksiFUV3dEPf7Fpzyu3W_-Kg4jfXQ0
 ENV CHAT_ID=1963161645
 
-# Installer les dépendances
+# Installer les dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Exposer le port sur lequel l'application écoute
