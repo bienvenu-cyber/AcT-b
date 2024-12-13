@@ -20,6 +20,7 @@ import platform
 import subprocess
 import psutil
 import time
+import random
 # Activer la surveillance de la mémoire
 tracemalloc.start()
 
@@ -44,15 +45,16 @@ bot = Bot(token=TELEGRAM_TOKEN)
 app = Flask(__name__)
 
 # Constantes
-CRYPTO_LIST = ["BTC", "ETH"]
+CRYPTO_LIST = ["BTC", "ETH", "XRP"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
 logging.basicConfig(level=logging.DEBUG)
+
 # Récupération des données historiques pour les cryptomonnaies
-def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=2000):
+def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=2000, max_retries=5, backoff_factor=2):
     base_url = "https://min-api.cryptocompare.com/data/v2/"
     
     # Déterminer le bon endpoint en fonction de l'intervalle
@@ -73,44 +75,56 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
     }
     
-    try:
-        # Faire la requête
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        data = response.json()
+    attempt = 0  # Compteur de tentatives
+    while attempt < max_retries:
+        try:
+            # Faire la requête
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
 
-        # Vérification de la réponse de l'API
-        if data["Response"] == "Success" and "Data" in data and "Data" in data["Data"]:
-            prices = [{
-                "time": item["time"],
-                "open": item["open"],
-                "high": item["high"],
-                "low": item["low"],
-                "close": item["close"],
-                "volume": item["volumeto"]
-            } for item in data["Data"]["Data"]]
-            
-            # Conversion en arrays NumPy pour TA-Lib
-            opens = np.array([item["open"] for item in prices])
-            highs = np.array([item["high"] for item in prices])
-            lows = np.array([item["low"] for item in prices])
-            closes = np.array([item["close"] for item in prices])
-            volumes = np.array([item["volume"] for item in prices])
+            # Vérification de la réponse de l'API
+            if data["Response"] == "Success" and "Data" in data and "Data" in data["Data"]:
+                prices = [{
+                    "time": item["time"],
+                    "open": item["open"],
+                    "high": item["high"],
+                    "low": item["low"],
+                    "close": item["close"],
+                    "volume": item["volumeto"]
+                } for item in data["Data"]["Data"]]
+                
+                # Conversion en arrays NumPy pour TA-Lib
+                opens = np.array([item["open"] for item in prices])
+                highs = np.array([item["high"] for item in prices])
+                lows = np.array([item["low"] for item in prices])
+                closes = np.array([item["close"] for item in prices])
+                volumes = np.array([item["volume"] for item in prices])
 
-            # Exemple d'utilisation de TA-Lib pour le calcul de l'Indicateur Technique
-            # Calcul de la moyenne mobile simple (SMA) sur 50 périodes
-            sma = talib.SMA(closes, timeperiod=50)
-            logging.debug(f"SMA calculée: {sma[-5:]}")  # Affichage des 5 derniers SMA calculés
+                # Exemple d'utilisation de TA-Lib pour le calcul de l'Indicateur Technique
+                # Calcul de la moyenne mobile simple (SMA) sur 50 périodes
+                sma = talib.SMA(closes, timeperiod=50)
+                logging.debug(f"SMA calculée: {sma[-5:]}")  # Affichage des 5 derniers SMA calculés
+                
+                # Vous pouvez calculer d'autres indicateurs techniques ici (RSI, MACD, etc.)
+                
+                return prices
+            else:
+                logging.error(f"Erreur API pour {crypto_symbol}: {data.get('Message', 'Erreur inconnue')}")
+                return None
+        except requests.exceptions.RequestException as e:
+            attempt += 1
+            logging.error(f"Erreur lors de la récupération des données pour {crypto_symbol}, tentative {attempt}/{max_retries}: {e}")
             
-            # Vous pouvez calculer d'autres indicateurs techniques ici (RSI, MACD, etc.)
+            # Si le nombre de tentatives est atteint, arrêter
+            if attempt >= max_retries:
+                logging.error(f"Échec après {max_retries} tentatives pour {crypto_symbol}")
+                return None
             
-            return prices
-        else:
-            logging.error(f"Erreur API pour {crypto_symbol}: {data.get('Message', 'Erreur inconnue')}")
-            return None
-    except requests.exceptions.RequestException as e:
-        logging.error(f"Erreur lors de la récupération des données pour {crypto_symbol}: {e}")
-        return None
+            # Attente avant de réessayer, avec un délai exponentiel
+            backoff_time = backoff_factor ** attempt + random.uniform(0, 1)
+            logging.info(f"Réessai dans {backoff_time:.2f} secondes...")
+            time.sleep(backoff_time)
 
 # Fonction de calcul des indicateurs avec TA-Lib
 def calculate_indicators(prices):
@@ -118,7 +132,10 @@ def calculate_indicators(prices):
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
     
     # Convertir les prix en tableau numpy pour TA-Lib
-    prices_array = np.array(prices)
+    opens = np.array([price["open"] for price in prices])
+    highs = np.array([price["high"] for price in prices])
+    lows = np.array([price["low"] for price in prices])
+    closes = np.array([price["close"] for price in prices])
     
     # Moyennes Mobiles (SMA et EMA)
     sma_short = talib.SMA(prices_array, timeperiod=10)[-1]  # SMA sur 10 périodes
@@ -203,32 +220,6 @@ print(decision)  # Affichera la décision d'achat/vente
 
 import asyncio
 
-# Fonction principale de vérification périodique
-async def periodic_price_check():
-    while True:
-        # On suppose que symbol et currency sont dans des variables globales
-        for symbol in CRYPTO_LIST:  # CRYPTO_LIST contient la liste des symboles crypto
-            prices = fetch_historical_data(symbol, CURRENCY)
-            if prices:
-                signal, indicators = analyze_signals(prices)
-                logging.info(f"Signal généré pour {symbol}/{CURRENCY}: {signal}")
-                
-                # Si un signal est généré, envoyer l'alerte Telegram
-                if signal:  # Ajuste cette condition selon tes besoins
-                    message = f"Signal de trading pour {symbol}/{CURRENCY}: {signal}"
-                    await send_telegram_message(CHAT_ID, message)  # CHAT_ID est la variable globale
-            else:
-                logging.error("Impossible d'analyser les données, données non disponibles.")
-        
-        await asyncio.sleep(900)  # Attendre 15 minutes avant la prochaine vérification
-
-# Appel de la fonction périodique sans passer les variables explicitement
-async def start_periodic_task():
-    await periodic_price_check()
-
-# Lance la tâche
-asyncio.run(start_periodic_task())
-
 # Envoi asynchrone d'un message Telegram
 async def send_telegram_message(chat_id, message):
     try:
@@ -236,6 +227,30 @@ async def send_telegram_message(chat_id, message):
         logging.info(f"Message Telegram envoyé : {message}")
     except Exception as e:
         logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
+
+# Fonction principale de vérification périodique
+async def periodic_price_check():
+    while True:
+        for symbol in CRYPTO_LIST:
+            prices = fetch_historical_data(symbol, CURRENCY)
+            if prices:
+                signal, indicators = analyze_signals(prices)
+                logging.info(f"Signal généré pour {symbol}/{CURRENCY}: {signal}")
+                
+                if signal:
+                    message = f"Signal de trading pour {symbol}/{CURRENCY}: {signal}"
+                    await send_telegram_message(CHAT_ID, message)
+            else:
+                logging.error("Impossible d'analyser les données, données non disponibles.")
+        
+        await asyncio.sleep(900)
+        
+# Appel de la fonction périodique sans passer les variables explicitement
+async def start_periodic_task():
+    await periodic_price_check()
+
+# Lance la tâche
+asyncio.run(start_periodic_task())
 
 # Notification d'erreur en cas d'exception
 async def notify_error(message):
@@ -257,23 +272,34 @@ def log_signal(signal, indicators, prices):
         "Time": time.strftime("%Y-%m-%d %H:%M:%S"),
     }])
     
+    # Vérification si le fichier existe ou non avant de l'écrire
     if not os.path.exists(SIGNAL_LOG):
-    if df.empty:  # Vérifie si le DataFrame est vide
         df.to_csv(SIGNAL_LOG, index=False)
-else:
-    df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
-else:
-    df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
-    
+    else:
+        df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
+
     logging.debug(f"Signal logué : {signal} à {prices[-1]}")
-        
+
 # Tâche périodique
 async def trading_task():
     while True:
         logging.info("Début d'une nouvelle itération de trading.")
-        tasks = [analyze_signals(prices) for crypto in CRYPTO_LIST]
+        
+        # Récupérer les prix pour chaque crypto
+        tasks = []
+        for crypto in CRYPTO_LIST:
+            prices = fetch_historical_data(crypto, CURRENCY)
+            if prices:
+                task = analyze_signals(prices)
+                tasks.append(task)
+
+        # Attendre que toutes les tâches soient terminées
         await asyncio.gather(*tasks)
+        
+        # Log des performances et de la mémoire
         log_memory_usage()
+        
+        # Attendre avant la prochaine itération
         await asyncio.sleep(900)
 
 # Fonction pour surveiller l'utilisation de la mémoire
