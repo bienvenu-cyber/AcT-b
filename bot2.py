@@ -159,27 +159,25 @@ def calculate_indicators(prices):
     closes = np.array([price["close"] for price in prices])
     
     # Moyennes Mobiles (SMA et EMA)
-    sma_short = talib.SMA(prices_array, timeperiod=10)[-1]  # SMA sur 10 périodes
-    sma_long = talib.SMA(prices_array, timeperiod=20)[-1]   # SMA sur 20 périodes
+    sma = talib.SMA(closes, timeperiod=14)[-1]
     
     # EMA
-    ema_short = talib.EMA(prices_array, timeperiod=12)[-1]  # EMA sur 12 périodes
-    ema_long = talib.EMA(prices_array, timeperiod=26)[-1]   # EMA sur 26 périodes
+    ema = talib.EMA(closes, timeperiod=14)[-1]
     
     # MACD : Différence entre les EMA à court terme et à long terme
-    macd, macd_signal, macd_hist = talib.MACD(prices_array, fastperiod=12, slowperiod=26, signalperiod=9)
+    macd, macdsignal, macdhist = talib.MACD(closes, fastperiod=12, slowperiod=26, signalperiod=9)
     
     # ATR (Average True Range) pour la volatilité
-    atr = talib.ATR(prices_array, prices_array, prices_array, timeperiod=14)[-1]  # ATR sur 14 périodes
+    atr = talib.ATR(highs, lows, closes, timeperiod=14)[-1]
     
     # Bandes de Bollinger : Calculées en fonction de la SMA et de l'ATR
-    upper_band, middle_band, lower_band = talib.BBANDS(prices_array, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+    upperband, middleband, lowerband = talib.BBANDS(closes, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
     
     # RSI (Relative Strength Index) sur 14 périodes
-    rsi = talib.RSI(prices_array, timeperiod=14)[-1]
+    rsi = talib.RSI(closes, timeperiod=14)[-1]
     
     # Stochastique : Calculs classiques avec %K et %D
-    slowk, slowd = talib.STOCH(prices_array, prices_array, prices_array, fastk_period=14, slowk_period=3, slowd_period=3)
+    slowk, slowd = talib.STOCH(highs, lows, closes, fastk_period=5, slowk_period=3, slowd_period=3, slowk_matype=0, slowd_matype=0)
     
     logging.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}")
     
