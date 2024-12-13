@@ -51,7 +51,14 @@ PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
 logging.basicConfig(level=logging.DEBUG)
-# Récupération des données historiques pour les cryptomonnaies
+import requests
+import time
+import logging
+
+# Configuration des logs
+logging.basicConfig(level=logging.INFO)
+
+# Fonction pour récupérer les données historiques des cryptomonnaies
 def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=2000, max_retries=5, backoff_factor=2):
     """
     Récupère les données historiques pour une cryptomonnaie donnée.
@@ -59,26 +66,24 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
     Args:
         crypto_symbol (str): Symbole de la cryptomonnaie (ex: 'BTC').
         currency (str): Symbole de la monnaie de référence (ex: 'USD').
-        interval (str): Intervalle de temps ('minute', 'hour', 'day').
+        interval (str): Intervalle de temps ('hour', 'day').
         limit (int): Nombre maximum de points de données à récupérer.
         max_retries (int): Nombre maximal de tentatives en cas d'échec.
         backoff_factor (int): Facteur de délai exponentiel entre les tentatives.
 
     Returns:
-        tuple: (prices, opens, highs, lows, closes, volumes), ou None en cas d'erreur.
+        tuple: (timestamps, opens, highs, lows, closes, volumes), ou None en cas d'erreur.
     """
     base_url = "https://min-api.cryptocompare.com/data/v2/"
-    
+
     # Déterminer le bon endpoint en fonction de l'intervalle
-    if interval == "minute":
-        endpoint = "histominute"
-    elif interval == "hour":
+    if interval == "hour":
         endpoint = "histohour"
     elif interval == "day":
         endpoint = "histoday"
     else:
-        raise ValueError("Intervalle non supporté. Utilisez 'minute', 'hour' ou 'day'.")
-    
+        raise ValueError("Intervalle non supporté. Utilisez 'hour' ou 'day'.")
+
     url = f"{base_url}{endpoint}"
     params = {
         "fsym": crypto_symbol.upper(),
@@ -159,7 +164,8 @@ def calculate_indicators(prices):
     closes = np.array([price["close"] for price in prices])
     
     # Moyennes Mobiles (SMA et EMA)
-    sma = talib.SMA(closes, timeperiod=14)[-1]
+    sma_short = talib.SMA(closes, timeperiod=14)[-1]
+    sma_long = talib.SMA(closes, timeperiod=50)[-1]
     
     # EMA
     ema = talib.EMA(closes, timeperiod=14)[-1]
@@ -299,43 +305,55 @@ def log_signal(signal, indicators, prices):
 
     logging.debug(f"Signal logué : {signal} à {prices[-1]}")
 
-# Tâche périodique
+# Tâche périodique asynchrone
 async def trading_task():
     while True:
         logging.info("Début d'une nouvelle itération de trading.")
         
-        # Récupérer les prix pour chaque crypto
+        # Récupérer les prix pour chaque crypto de manière asynchrone
         tasks = []
         for crypto in CRYPTO_LIST:
-            prices = fetch_historical_data(crypto, CURRENCY)
-            if prices:
-                # Analyser les signaux de trading pour la crypto
-                signal, indicators = analyze_signals(prices)
-                
-                # Si un signal est généré (Achat/Vente)
-                if signal:
-                    # Calcul du Stop Loss et Take Profit pour le dernier prix (prix d'entrée)
-                    entry_price = prices[-1]["close"]  # On utilise ici le dernier prix de clôture
-                    sl_price, tp_price = calculate_sl_tp(entry_price)
+            tasks.append(fetch_and_analyze(crypto))  # Crée une tâche pour chaque crypto
 
-                    # Créer le message Telegram avec le signal, le prix d'entrée, le SL et TP
-                    message = f"Signal de trading pour {crypto}/{CURRENCY}: {signal}\n"
-                    message += f"Prix d'entrée: {entry_price}\n"
-                    message += f"Stop Loss: {sl_price}\n"
-                    message += f"Take Profit: {tp_price}\n"
-                    
-                    # Envoi du message Telegram avec toutes les informations
-                    await send_telegram_message(CHAT_ID, message)
+        # Exécuter toutes les tâches de manière concurrente
+        await asyncio.gather(*tasks)
 
-                logging.info(f"Signal généré pour {crypto}/{CURRENCY}: {signal}")
-            else:
-                logging.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
-        
         # Log de la mémoire et des performances
         log_memory_usage()
 
         # Attendre avant la prochaine itération (900 secondes = 15 minutes)
         await asyncio.sleep(900)
+
+# Fonction asynchrone pour récupérer les données et analyser les signaux
+async def fetch_and_analyze(crypto):
+    try:
+        # Récupérer les prix de manière asynchrone
+        prices = await fetch_historical_data(crypto, CURRENCY)
+        
+        if prices:
+            # Analyser les signaux de trading pour la crypto
+            signal, indicators = analyze_signals(prices)
+            
+            if signal:
+                # Calcul du Stop Loss et Take Profit pour le dernier prix (prix d'entrée)
+                entry_price = prices[-1]["close"]
+                sl_price, tp_price = calculate_sl_tp(entry_price)
+
+                # Créer le message Telegram avec le signal, le prix d'entrée, le SL et TP
+                message = f"Signal de trading pour {crypto}/{CURRENCY}: {signal}\n"
+                message += f"Prix d'entrée: {entry_price}\n"
+                message += f"Stop Loss: {sl_price}\n"
+                message += f"Take Profit: {tp_price}\n"
+                
+                # Envoi du message Telegram avec toutes les informations
+                await send_telegram_message(CHAT_ID, message)
+
+            logging.info(f"Signal généré pour {crypto}/{CURRENCY}: {signal}")
+        else:
+            logging.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
+    
+    except Exception as e:
+        logging.error(f"Erreur dans le traitement de {crypto}: {e}")
 
 # Fonction pour surveiller l'utilisation de la mémoire
 def log_memory_usage():
@@ -385,9 +403,13 @@ def log_performance():
 # Ajout du gestionnaire de signaux
 signal.signal(signal.SIGTERM, handle_shutdown_signal)
 
-from flask import Flask, jsonify
+import asyncio
+import logging
+import sys
 from threading import Thread
+from flask import Flask, jsonify
 
+# Configuration de Flask
 app = Flask(__name__)
 
 # Route Flask
@@ -396,16 +418,23 @@ def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
 # Lancer Flask sur un thread séparé
-    # Fonction correctement indentée
 def run_flask():
-    from threading import Thread
-    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
+    app.run(host='0.0.0.0', port=PORT, threaded=True, use_reloader=False)
+
+# Fonction pour démarrer les tâches asynchrones
+async def start_trading():
+    await safe_trading_task()  # Lancer la tâche asynchrone
 
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
-        # Suppression d'asyncio, et on lance simplement la tâche de trading.
-        safe_trading_task()
+        # Démarrer Flask dans un thread séparé
+        flask_thread = Thread(target=run_flask)
+        flask_thread.start()
+
+        # Démarrer les tâches asynchrones (comme trading_task)
+        asyncio.run(start_trading())
+
     except KeyboardInterrupt:
         logging.info("Exécution interrompue manuellement.")
         sys.exit(0)
