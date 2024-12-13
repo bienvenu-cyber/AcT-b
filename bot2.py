@@ -52,9 +52,22 @@ PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
 logging.basicConfig(level=logging.DEBUG)
-
 # Récupération des données historiques pour les cryptomonnaies
 def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=2000, max_retries=5, backoff_factor=2):
+    """
+    Récupère les données historiques pour une cryptomonnaie donnée.
+
+    Args:
+        crypto_symbol (str): Symbole de la cryptomonnaie (ex: 'BTC').
+        currency (str): Symbole de la monnaie de référence (ex: 'USD').
+        interval (str): Intervalle de temps ('minute', 'hour', 'day').
+        limit (int): Nombre maximum de points de données à récupérer.
+        max_retries (int): Nombre maximal de tentatives en cas d'échec.
+        backoff_factor (int): Facteur de délai exponentiel entre les tentatives.
+
+    Returns:
+        tuple: (prices, opens, highs, lows, closes, volumes), ou None en cas d'erreur.
+    """
     base_url = "https://min-api.cryptocompare.com/data/v2/"
     
     # Déterminer le bon endpoint en fonction de l'intervalle
@@ -78,6 +91,8 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
     attempt = 0  # Compteur de tentatives
     while attempt < max_retries:
         try:
+            logging.info(f"Récupération des données pour {crypto_symbol} ({interval}), tentative {attempt + 1}...")
+
             # Faire la requête
             response = requests.get(url, params=params)
             response.raise_for_status()
@@ -93,25 +108,25 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
                     "close": item["close"],
                     "volume": item["volumeto"]
                 } for item in data["Data"]["Data"]]
-                
-                # Conversion en arrays NumPy pour TA-Lib
-                opens = np.array([item["open"] for item in prices])
-                highs = np.array([item["high"] for item in prices])
-                lows = np.array([item["low"] for item in prices])
-                closes = np.array([item["close"] for item in prices])
-                volumes = np.array([item["volume"] for item in prices])
 
-                # Exemple d'utilisation de TA-Lib pour le calcul de l'Indicateur Technique
-                # Calcul de la moyenne mobile simple (SMA) sur 50 périodes
+                # Conversion en arrays NumPy pour TA-Lib
+                opens = np.array([item["open"] for item in prices], dtype=np.float64)
+                highs = np.array([item["high"] for item in prices], dtype=np.float64)
+                lows = np.array([item["low"] for item in prices], dtype=np.float64)
+                closes = np.array([item["close"] for item in prices], dtype=np.float64)
+                volumes = np.array([item["volume"] for item in prices], dtype=np.float64)
+
+                # Exemple : Calcul d'une moyenne mobile simple (SMA)
                 sma = talib.SMA(closes, timeperiod=50)
-                logging.debug(f"SMA calculée: {sma[-5:]}")  # Affichage des 5 derniers SMA calculés
-                
-                # Vous pouvez calculer d'autres indicateurs techniques ici (RSI, MACD, etc.)
-                
-                return prices
+                logging.debug(f"SMA calculée (5 derniers points) : {sma[-5:]}")
+
+                logging.info(f"Données récupérées avec succès pour {crypto_symbol}.")
+                return prices, opens, highs, lows, closes, volumes
+
             else:
                 logging.error(f"Erreur API pour {crypto_symbol}: {data.get('Message', 'Erreur inconnue')}")
                 return None
+
         except requests.exceptions.RequestException as e:
             attempt += 1
             logging.error(f"Erreur lors de la récupération des données pour {crypto_symbol}, tentative {attempt}/{max_retries}: {e}")
@@ -125,6 +140,13 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
             backoff_time = backoff_factor ** attempt + random.uniform(0, 1)
             logging.info(f"Réessai dans {backoff_time:.2f} secondes...")
             time.sleep(backoff_time)
+
+        except Exception as e:
+            logging.error(f"Erreur inattendue : {e}")
+            return None
+
+    logging.error(f"Échec définitif pour {crypto_symbol}.")
+    return None
 
 # Fonction de calcul des indicateurs avec TA-Lib
 def calculate_indicators(prices):
