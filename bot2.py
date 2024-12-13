@@ -91,9 +91,6 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
     attempt = 0  # Compteur de tentatives
     while attempt < max_retries:
         try:
-            logging.info(f"Récupération des données pour {crypto_symbol} ({interval}), tentative {attempt + 1}...")
-
-            # Faire la requête
             response = requests.get(url, params=params)
             response.raise_for_status()
             data = response.json()
@@ -115,26 +112,19 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
                 lows = np.array([item["low"] for item in prices], dtype=np.float64)
                 closes = np.array([item["close"] for item in prices], dtype=np.float64)
                 volumes = np.array([item["volume"] for item in prices], dtype=np.float64)
-
-                # Exemple : Calcul d'une moyenne mobile simple (SMA)
-                sma = talib.SMA(closes, timeperiod=50)
-                logging.debug(f"SMA calculée (5 derniers points) : {sma[-5:]}")
-
-                logging.info(f"Données récupérées avec succès pour {crypto_symbol}.")
+                
                 return prices, opens, highs, lows, closes, volumes
 
             else:
-                logging.error(f"Erreur API pour {crypto_symbol}: {data.get('Message', 'Erreur inconnue')}")
+                print(f"Erreur API: {data.get('Message', 'Erreur inconnue')}")
                 return None
 
         except requests.exceptions.RequestException as e:
             attempt += 1
-            logging.error(f"Erreur lors de la récupération des données pour {crypto_symbol}, tentative {attempt}/{max_retries}: {e}")
-            
-            # Si le nombre de tentatives est atteint, arrêter
             if attempt >= max_retries:
-                logging.error(f"Échec après {max_retries} tentatives pour {crypto_symbol}")
+                print(f"Échec après {max_retries} tentatives : {e}")
                 return None
+            time.sleep(backoff_factor ** attempt)
             
             # Attente avant de réessayer, avec un délai exponentiel
             backoff_time = backoff_factor ** attempt + random.uniform(0, 1)
