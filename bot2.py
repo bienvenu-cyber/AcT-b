@@ -105,6 +105,15 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
                     "close": item["close"],
                     "volume": item["volumeto"]
                 } for item in data["Data"]["Data"]]
+                
+                prices_data = fetch_historical_data(crypto_symbol, "USD", interval="hour")
+if prices_data:
+    prices, opens, highs, lows, closes, volumes = prices_data
+    signal = analyze_signals(prices)
+    print(signal)
+else:
+    logging.error("Les données des prix n'ont pas pu être récupérées.")
+                
 
                 # Conversion en arrays NumPy pour TA-Lib
                 opens = np.array([item["open"] for item in prices], dtype=np.float64)
@@ -221,6 +230,10 @@ def analyze_signals(prices):
 
     logging.debug(f"Décision d'action : {decision}")
     return decision
+
+# Appel de la fonction d'analyse
+signal = analyze_signals (prices)
+print (signal)
 
 # Appeler la fonction analyze_signals avec la variable prices définie
 decision = analyze_signals(prices)
