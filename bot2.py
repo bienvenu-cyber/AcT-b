@@ -222,10 +222,6 @@ def analyze_signals(prices):
     logging.debug(f"Décision d'action : {decision}")
     return decision
 
-# Appel de la fonction d'analyse
-signal = analyze_signals(prices)
-print(signal)
-
 # Appeler la fonction analyze_signals avec la variable prices définie
 decision = analyze_signals(prices)
 print(decision)  # Affichera la décision d'achat/vente
