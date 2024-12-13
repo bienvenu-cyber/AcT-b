@@ -24,8 +24,6 @@ import random
 # Activer la surveillance de la mémoire
 tracemalloc.start()
 
-logging.basicConfig(stream=sys.stderr, level=logging.INFO)  # Ou ERROR selon ton besoin
-
 # Configuration des logs
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -46,6 +44,7 @@ app = Flask(__name__)
 
 # Constantes
 CRYPTO_LIST = ["BTC", "ETH", "XRP"]
+CURRENCY = "USD"
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -105,15 +104,6 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
                     "close": item["close"],
                     "volume": item["volumeto"]
                 } for item in data["Data"]["Data"]]
-                
-                prices_data = fetch_historical_data(crypto_symbol, "USD", interval="hour")
-if prices_data:
-    prices, opens, highs, lows, closes, volumes = prices_data
-    signal = analyze_signals(prices)
-    print(signal)
-else:
-    logging.error("Les données des prix n'ont pas pu être récupérées.")
-                
 
                 # Conversion en arrays NumPy pour TA-Lib
                 opens = np.array([item["open"] for item in prices], dtype=np.float64)
@@ -146,6 +136,16 @@ else:
 
     logging.error(f"Échec définitif pour {crypto_symbol}.")
     return None
+    # Appel de fetch_historical_data après sa définition
+crypto_symbol = "BTC"  # Exemple de symbole
+prices_data = fetch_historical_data(crypto_symbol, "USD", interval="hour")
+
+# Vérifier si les données ont été récupérées
+if prices_data:
+    prices, opens, highs, lows, closes, volumes = prices_data
+    logging.info(f"Les données ont été récupérées avec succès : {len(prices)} points.")
+else:
+    logging.error("Impossible de récupérer les données.")
 
 # Fonction de calcul des indicateurs avec TA-Lib
 def calculate_indicators(prices):
