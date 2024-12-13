@@ -290,16 +290,32 @@ async def trading_task():
         for crypto in CRYPTO_LIST:
             prices = fetch_historical_data(crypto, CURRENCY)
             if prices:
-                task = analyze_signals(prices)
-                tasks.append(task)
+                # Analyser les signaux de trading pour la crypto
+                signal, indicators = analyze_signals(prices)
+                
+                # Si un signal est généré (Achat/Vente)
+                if signal:
+                    # Calcul du Stop Loss et Take Profit pour le dernier prix (prix d'entrée)
+                    entry_price = prices[-1]["close"]  # On utilise ici le dernier prix de clôture
+                    sl_price, tp_price = calculate_sl_tp(entry_price)
 
-        # Attendre que toutes les tâches soient terminées
-        await asyncio.gather(*tasks)
+                    # Créer le message Telegram avec le signal, le prix d'entrée, le SL et TP
+                    message = f"Signal de trading pour {crypto}/{CURRENCY}: {signal}\n"
+                    message += f"Prix d'entrée: {entry_price}\n"
+                    message += f"Stop Loss: {sl_price}\n"
+                    message += f"Take Profit: {tp_price}\n"
+                    
+                    # Envoi du message Telegram avec toutes les informations
+                    await send_telegram_message(CHAT_ID, message)
+
+                logging.info(f"Signal généré pour {crypto}/{CURRENCY}: {signal}")
+            else:
+                logging.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
         
-        # Log des performances et de la mémoire
+        # Log de la mémoire et des performances
         log_memory_usage()
-        
-        # Attendre avant la prochaine itération
+
+        # Attendre avant la prochaine itération (900 secondes = 15 minutes)
         await asyncio.sleep(900)
 
 # Fonction pour surveiller l'utilisation de la mémoire
@@ -361,7 +377,8 @@ def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
 # Lancer Flask sur un thread séparé
-    def run_flask():
+    # Fonction correctement indentée
+def run_flask():
     from threading import Thread
     Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
 
