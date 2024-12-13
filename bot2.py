@@ -15,8 +15,15 @@ import objgraph  # Pour la détection des fuites de mémoire
 import platform
 import subprocess
 import talib
+import sys
+import platform
+import subprocess
+import psutil
+import time
 # Activer la surveillance de la mémoire
 tracemalloc.start()
+
+logging.basicConfig(stream=sys.stderr, level=logging.INFO)  # Ou ERROR selon ton besoin
 
 # Configuration des logs
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -194,16 +201,33 @@ print(signal)
 decision = analyze_signals(prices)
 print(decision)  # Affichera la décision d'achat/vente
 
+import asyncio
+
 # Fonction principale de vérification périodique
-def periodic_price_check(symbol, currency):
+async def periodic_price_check():
     while True:
-        prices = fetch_historical_data(symbol, currency)
-        if prices:
-            signal, indicators = analyze_signals(prices)
-            logging.info(f"Signal généré pour {symbol}/{currency}: {signal}")
-        else:
-            logging.error("Impossible d'analyser les données, données non disponibles.")
-        time.sleep(900)  # Attendre 15 minutes  avant la prochaine vérification
+        # On suppose que symbol et currency sont dans des variables globales
+        for symbol in CRYPTO_LIST:  # CRYPTO_LIST contient la liste des symboles crypto
+            prices = fetch_historical_data(symbol, CURRENCY)
+            if prices:
+                signal, indicators = analyze_signals(prices)
+                logging.info(f"Signal généré pour {symbol}/{CURRENCY}: {signal}")
+                
+                # Si un signal est généré, envoyer l'alerte Telegram
+                if signal:  # Ajuste cette condition selon tes besoins
+                    message = f"Signal de trading pour {symbol}/{CURRENCY}: {signal}"
+                    await send_telegram_message(CHAT_ID, message)  # CHAT_ID est la variable globale
+            else:
+                logging.error("Impossible d'analyser les données, données non disponibles.")
+        
+        await asyncio.sleep(900)  # Attendre 15 minutes avant la prochaine vérification
+
+# Appel de la fonction périodique sans passer les variables explicitement
+async def start_periodic_task():
+    await periodic_price_check()
+
+# Lance la tâche
+asyncio.run(start_periodic_task())
 
 # Envoi asynchrone d'un message Telegram
 async def send_telegram_message(chat_id, message):
@@ -234,8 +258,10 @@ def log_signal(signal, indicators, prices):
     }])
     
     if not os.path.exists(SIGNAL_LOG):
-        if df.empty:  # Vérifie si le DataFrame est vide
-    df.to_csv(SIGNAL_LOG, index=False)
+    if df.empty:  # Vérifie si le DataFrame est vide
+        df.to_csv(SIGNAL_LOG, index=False)
+else:
+    df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
 else:
     df.to_csv(SIGNAL_LOG, mode="a", header=False, index=False)
     
@@ -267,18 +293,33 @@ async def safe_trading_task():
 
 # Gestion des signaux d'arrêt et redémarrage automatique
 def handle_shutdown_signal(signum, frame):
-    logging.info("Arrêt de l'application (Signal: %s)", signum)
-    logging.info("Redémarrage de l'application...")
-    
-    if platform.system() == "Darwin":  # Si macOS
-        subprocess.call(["osascript", "-e", "tell application \"Terminal\" to quit"])
-    
-    time.sleep(2)
-    sys.exit(0)
+    try:
+        logging.info("Arrêt de l'application (Signal: %s)", signum)
+        logging.info("Redémarrage de l'application...")
+        
+        # Vérification du système d'exploitation pour effectuer une action spécifique
+        if platform.system() == "Darwin":  # Si macOS
+            subprocess.call(["osascript", "-e", "tell application \"Terminal\" to quit"])
+        
+        # Attendre un peu avant de quitter
+        time.sleep(2)
+    except Exception as e:
+        logging.error(f"Erreur lors du traitement du signal d'arrêt: {e}")
+    finally:
+        # Quitter proprement l'application
+        sys.exit(0)
 
 # Log des performances
 def log_performance():
-    pass
+    # Exemple simple pour loguer l'utilisation du CPU et de la mémoire
+    cpu_usage = psutil.cpu_percent(interval=1)  # Utilisation du CPU sur 1 seconde
+    memory_info = psutil.virtual_memory()  # Informations sur la mémoire
+
+    # Log des performances
+    logging.info(f"Utilisation CPU: {cpu_usage}%")
+    logging.info(f"Utilisation mémoire: {memory_info.percent}%")
+    logging.info(f"RAM totale: {memory_info.total / (1024 * 1024)} MB")
+    logging.info(f"RAM disponible: {memory_info.available / (1024 * 1024)} MB")
 
 # Ajout du gestionnaire de signaux
 signal.signal(signal.SIGTERM, handle_shutdown_signal)
@@ -301,8 +342,8 @@ def home():
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
-        asyncio.run(run_flask())
-        asyncio.run(safe_trading_task())
+        # Suppression d'asyncio, et on lance simplement la tâche de trading.
+        safe_trading_task()
     except KeyboardInterrupt:
         logging.info("Exécution interrompue manuellement.")
         sys.exit(0)
