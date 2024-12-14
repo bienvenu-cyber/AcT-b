@@ -1,4 +1,3 @@
-import os
 import requests
 import numpy as np
 import pandas as pd
@@ -230,24 +229,23 @@ def run_async_task():
 def start_flask():
     try:
         app.run(host="0.0.0.0", port=PORT)
-    except KeyboardInterrupt:
-        logging.info("Serveur Flask arrêté.")
     except Exception as e:
-        logging.error(f"Erreur dans le serveur Flask : {e}")
+        logger.error(f"Erreur dans Flask : {e}")
 
-def send_telegram_message(message):
-    try:
-        bot.send_message(chat_id=CHAT_ID, text=message)
-    except Exception as e:
-        logging.error(f"Erreur lors de l'envoi du message Telegram : {e}")
-
+# Fonction principale
 if __name__ == "__main__":
-    logging.debug(f"Configuration de l'application pour le port : {PORT}")
-    
-    # Lancer le serveur Flask dans un thread séparé
-    flask_thread = Thread(target=start_flask)
+    logger.info("Démarrage de l'application.")
+
+    # Démarrage du serveur Flask
+    flask_thread = Thread(target=start_flask, daemon=True)
     flask_thread.start()
-    
-    # Lancer la tâche périodique en parallèle
-    periodic_task_thread = Thread(target=run_async_task)
-    periodic_task_thread.start()
+
+    # Lancer les tâches asyncio
+    try:
+        asyncio.run(start_periodic_task())
+    except Exception as e:
+        logger.error(f"Erreur dans le programme principal : {e}")
+
+    # Arrêt propre
+    flask_thread.join()
+    logger.info("Application arrêtée proprement.")
