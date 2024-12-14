@@ -114,6 +114,10 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
             logging.error(f"Erreur inattendue : {e}")
             return None
 
+        finally:
+            # Fermer la session après chaque tentative pour garantir qu'il n'y a pas de fuites
+            session.close()
+
     logging.error(f"Échec définitif pour {crypto_symbol}.")
     return None
 
