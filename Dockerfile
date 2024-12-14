@@ -41,4 +41,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8001
 
 # Commande de démarrage pour Gunicorn
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:8001", "--keep-alive", "120", "--log-level", "debug", "bot2:app"]
+CMD ["gunicorn -w 4 -b 0.0.0.0:$PORT --keep-alive 120 --timeout 120 --log-level debug bot2:app"]
