@@ -76,10 +76,12 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
     attempt = 0  # Compteur de tentatives
     while attempt < max_retries:
         try:
-            response = session.get(url, params=params)
-            response.raise_for_status()  # Lève une exception pour les erreurs HTTP
-            data = response.json()
+            # Utilisation de la session dans un bloc 'with' pour gérer la connexion automatiquement
+            with requests.Session() as session:
+                response = session.get(url, params=params, timeout=30)  # Timeout de 30 secondes
+                response.raise_for_status()
 
+                        # Vérifier si la réponse est correcte
             if data["Response"] == "Success" and "Data" in data:
                 prices = [{
                     "time": item["time"],
@@ -115,7 +117,7 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
             return None
 
         finally:
-            # Fermer la session après chaque tentative pour garantir qu'il n'y a pas de fuites
+            # Fermer explicitement la session après chaque requête
             session.close()
 
     logging.error(f"Échec définitif pour {crypto_symbol}.")
