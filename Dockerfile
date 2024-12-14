@@ -33,6 +33,7 @@ COPY bot2.py /app/bot2.py
 # Ajouter les variables d'environnement (TOKEN et CHAT_ID)
 ENV TELEGRAM_TOKEN=8052620219:AAEnP3ksiFUV3dEPf7Fpzyu3W_-Kg4jfXQ0
 ENV CHAT_ID=1963161645
+ENV PORT=8001
 
 # Installer les dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
@@ -41,4 +42,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8001
 
 # Commande de démarrage pour Gunicorn
-CMD ["gunicorn -w 4 -b 0.0.0.0:$PORT --keep-alive 120 --timeout 120 --log-level debug bot2:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8001", "--keep-alive", "120", "--timeout", "120", "--log-level", "debug", "bot2:app"]
