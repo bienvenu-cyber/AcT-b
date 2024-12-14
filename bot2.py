@@ -69,12 +69,15 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
         "limit": limit,
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
     }
-    
+
+    # Créer une session persistante pour réutiliser la connexion HTTP
+    session = requests.Session()
+
     attempt = 0  # Compteur de tentatives
     while attempt < max_retries:
         try:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
+            response = session.get(url, params=params)
+            response.raise_for_status()  # Lève une exception pour les erreurs HTTP
             data = response.json()
 
             if data["Response"] == "Success" and "Data" in data:
@@ -92,7 +95,7 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
                 lows = np.array([item["low"] for item in prices])
                 closes = np.array([item["close"] for item in prices])
                 volumes = np.array([item["volume"] for item in prices])
-                
+
                 logging.debug(f"Données récupérées pour {crypto_symbol}: {len(prices)} éléments.")
                 return prices, opens, highs, lows, closes, volumes
 
@@ -105,8 +108,8 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
             if attempt >= max_retries:
                 logging.error(f"Échec après {max_retries} tentatives : {e}")
                 return None
-            time.sleep(backoff_factor ** attempt)
-            
+            time.sleep(backoff_factor ** attempt)  # Attendre avant la nouvelle tentative
+
         except Exception as e:
             logging.error(f"Erreur inattendue : {e}")
             return None
