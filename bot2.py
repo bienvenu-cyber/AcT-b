@@ -23,7 +23,7 @@ import random
 tracemalloc.start()
 
 # Configuration des logs
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 logging.debug("Démarrage de l'application.")
 
@@ -93,6 +93,7 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
                 closes = np.array([item["close"] for item in prices])
                 volumes = np.array([item["volume"] for item in prices])
                 
+                logging.debug(f"Données récupérées pour {crypto_symbol}: {len(prices)} éléments.")
                 return prices, opens, highs, lows, closes, volumes
 
             else:
@@ -149,7 +150,7 @@ def calculate_indicators(prices):
         "Stochastic_D": slowd[-1],
     }
 
-# Calcul du Stop Loss et Take Profit en pourcentage du prix d'entrée
+# Fonction de calcul du Stop Loss et Take Profit en pourcentage du prix d'entrée
 def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
     sl_price = entry_price - (sl_percent * entry_price)
     tp_price = entry_price + (tp_percent * entry_price)
@@ -159,58 +160,94 @@ def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
     return sl_price, tp_price
 
 # Fonction de décision d'achat/vente basée sur les indicateurs
-def analyze_signals(prices):
-    if not prices or len(prices) < 26:
-        raise ValueError("Données invalides ou insuffisantes pour l'analyse des signaux.")
+def decision_buy_sell(data):
+    # Indicateurs pré-calculés
+    # Conditions de Croisement SMA
+    signal_sma = "Buy" if data['SMA_short'] > data['SMA_long'] else "Sell"
     
-    indicators = calculate_indicators(prices)
+    # Conditions RSI
+    signal_rsi = "Buy" if data['RSI'] < 30 else "Sell" if data['RSI'] > 70 else "Neutral"
     
-    if indicators['RSI'] < 30 and indicators['Stochastic_K'] < 20:
-        return "BUY"
-    elif indicators['RSI'] > 70 and indicators['Stochastic_K'] > 80:
-        return "SELL"
+    # Condition MACD
+    signal_macd = "Buy" if data['MACD'] > 0 else "Sell" if data['MACD'] < 0 else "Neutral"
+    
+    # Condition ATR (exemple avec seuil de volatilité)
+    signal_atr = "Buy" if data['ATR'] > seuil_atr else "Sell" if data['ATR'] < seuil_atr else "Neutral"
+    
+    # Intégration d'autres indicateurs comme Bollinger Bands, Stochastic, etc.
+    signal_bollinger = "Buy" if data['Close'] < data['Lower_Band'] else "Sell" if data['Close'] > data['Upper_Band'] else "Neutral"
+    
+    # Stockage des signaux dans une liste pour une comparaison plus facile de la majorité
+    signals = [signal_sma, signal_rsi, signal_macd, signal_atr, signal_bollinger]
+    
+    # Comptage du nombre de signaux "Buy", "Sell", et "Neutral"
+    buy_count = signals.count("Buy")
+    sell_count = signals.count("Sell")
+    neutral_count = signals.count("Neutral")
+    
+    # Règle de majorité : plus de la moitié des indicateurs doivent être d'accord
+    if buy_count > sell_count and buy_count > neutral_count:
+        return "Buy"
+    elif sell_count > buy_count and sell_count > neutral_count:
+        return "Sell"
     else:
-        return "HOLD"
-
-# Envoi d'un message sur Telegram
+        return "Neutral"
+        
+        # Fonction pour envoyer des messages via Telegram
 def send_telegram_message(message):
     try:
-        bot.send_message(chat_id=CHAT_ID, text=message)
+        bot.send_message(chat_id=CHAT_ID, text=message, timeout=60)
     except Exception as e:
-        logging.error(f"Erreur d'envoi de message Telegram : {e}")
+        logging.error(f"Erreur d'envoi Telegram : {e}")
 
 # Démarrage des tâches périodiques
 async def start_periodic_task():
     while True:
         try:
+            logging.debug("Démarrage de la tâche périodique.")
             # Récupération des données
             prices_data = await asyncio.to_thread(fetch_historical_data, "BTC", "USD")
             if prices_data:
                 prices, opens, highs, lows, closes, volumes = prices_data
-                signal = analyze_signals(prices)
-                send_telegram_message(f"Signal détecté : {signal}")
-            
+                data = calculate_indicators(prices)
+                signal = decision_buy_sell(data)  # Appliquer la logique de décision
+                entry_price = closes[-1]  # Dernier prix de clôture comme prix d'entrée
+                sl_price, tp_price = calculate_sl_tp(entry_price)
+                message = (f"Signal détecté : {signal}\n"
+                           f"Stop Loss : {sl_price}\n"
+                           f"Take Profit : {tp_price}")
+                send_telegram_message(message)  # Envoi du message Telegram
             await asyncio.sleep(60 * 15)  # Attente de 15 minutes avant la prochaine requête
         except Exception as e:
             logging.error(f"Erreur lors de l'exécution de la tâche périodique : {e}")
             await asyncio.sleep(60)
 
-# Lancer la tâche principale dans un thread
+# Fonction principale pour exécuter la tâche asynchrone
 def run_async_task():
     asyncio.run(start_periodic_task())
 
 # Démarrer Flask et les tâches asynchrones
 def start_flask():
-    app.run(host="0.0.0.0", port=PORT)
+    try:
+        app.run(host="0.0.0.0", port=PORT)
+    except KeyboardInterrupt:
+        logging.info("Serveur Flask arrêté.")
+    except Exception as e:
+        logging.error(f"Erreur dans le serveur Flask : {e}")
 
-# Endpoint Flask pour vérifier que le serveur fonctionne
-@app.route("/status")
-def status():
-    return jsonify({"status": "Server is running"}), 200
+def send_telegram_message(message):
+    try:
+        bot.send_message(chat_id=CHAT_ID, text=message)
+    except Exception as e:
+        logging.error(f"Erreur lors de l'envoi du message Telegram : {e}")
 
 if __name__ == "__main__":
+    logging.debug(f"Configuration de l'application pour le port : {PORT}")
+    
+    # Lancer le serveur Flask dans un thread séparé
     flask_thread = Thread(target=start_flask)
     flask_thread.start()
-
-    # Lancer les tâches périodiques
-    run_async_task()
+    
+    # Lancer la tâche périodique en parallèle
+    periodic_task_thread = Thread(target=run_async_task)
+    periodic_task_thread.start()
