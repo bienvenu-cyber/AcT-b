@@ -40,6 +40,12 @@ bot = Bot(token=TELEGRAM_TOKEN)
 # Initialisation de Flask
 app = Flask(__name__)
 
+# Autres routes ou logique d'application...
+
+@app.route("/health", methods=["GET"])
+def health():
+    return "Healthy", 200
+
 # Constantes
 CRYPTO_LIST = ["BTC", "ETH", "XRP"]
 CURRENCY = "USD"
