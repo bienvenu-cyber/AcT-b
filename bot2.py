@@ -24,8 +24,6 @@ import random
 # Activer la surveillance de la mémoire
 tracemalloc.start()
 
-logging.basicConfig(stream=sys.stderr, level=logging.INFO)  # Ou ERROR selon ton besoin
-
 # Configuration des logs
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -82,27 +80,33 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
             response.raise_for_status()
             data = response.json()
 
-            if data["Response"] == "Success" and "Data" in data:
-                prices = [{
-                    "time": item["time"],
-                    "open": item["open"],
-                    "high": item["high"],
-                    "low": item["low"],
-                    "close": item["close"],
-                    "volume": item["volumeto"]
-                } for item in data["Data"]["Data"]]
+            # Validation des données
+            if data.get("Response") == "Success" and "Data" in data and "Data" in data["Data"]:
+                prices = []
+                for item in data["Data"]["Data"]:
+                    # Vérifiez que toutes les clés nécessaires sont présentes
+                    if all(key in item for key in ["time", "open", "high", "low", "close", "volumeto"]):
+                        prices.append({
+                            "time": item["time"],
+                            "open": item["open"],
+                            "high": item["high"],
+                            "low": item["low"],
+                            "close": item["close"],
+                            "volume": item["volumeto"]
+                        })
 
+                # Extraire les valeurs pour les indicateurs
                 opens = np.array([item["open"] for item in prices])
                 highs = np.array([item["high"] for item in prices])
                 lows = np.array([item["low"] for item in prices])
                 closes = np.array([item["close"] for item in prices])
                 volumes = np.array([item["volume"] for item in prices])
-                
+
                 logging.debug(f"Données récupérées pour {crypto_symbol}: {len(prices)} éléments.")
                 return prices, opens, highs, lows, closes, volumes
 
             else:
-                logging.error(f"Erreur API: {data.get('Message', 'Erreur inconnue')}")
+                logging.error(f"Erreur API : {data.get('Message', 'Données invalides.')}")
                 return None
 
         except requests.exceptions.RequestException as e:
@@ -110,8 +114,9 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
             if attempt >= max_retries:
                 logging.error(f"Échec après {max_retries} tentatives : {e}")
                 return None
+            logging.warning(f"Tentative {attempt}/{max_retries} échouée, nouvelle tentative dans {backoff_factor ** attempt} secondes.")
             time.sleep(backoff_factor ** attempt)
-            
+
         except Exception as e:
             logging.error(f"Erreur inattendue : {e}")
             return None
@@ -131,27 +136,27 @@ def calculate_indicators(prices):
     closes = np.array([price["close"] for price in prices])
     
     # Moyennes Mobiles (SMA et EMA)
-    sma_short = talib.SMA(prices_array, timeperiod=10)[-1]  # SMA sur 10 périodes
-    sma_long = talib.SMA(prices_array, timeperiod=20)[-1]   # SMA sur 20 périodes
+    sma_short = talib.SMA(closes, timeperiod=10)[-1]  # SMA sur 10 périodes
+    sma_long = talib.SMA(closes, timeperiod=20)[-1]   # SMA sur 20 périodes
     
     # EMA
-    ema_short = talib.EMA(prices_array, timeperiod=12)[-1]  # EMA sur 12 périodes
-    ema_long = talib.EMA(prices_array, timeperiod=26)[-1]   # EMA sur 26 périodes
+    ema_short = talib.EMA(closes, timeperiod=12)[-1]  # EMA sur 12 périodes
+    ema_long = talib.EMA(closes, timeperiod=26)[-1]   # EMA sur 26 périodes
     
     # MACD : Différence entre les EMA à court terme et à long terme
-    macd, macd_signal, macd_hist = talib.MACD(prices_array, fastperiod=12, slowperiod=26, signalperiod=9)
+    macd, macd_signal, macd_hist = talib.MACD(closes, fastperiod=12, slowperiod=26, signalperiod=9)
     
     # ATR (Average True Range) pour la volatilité
-    atr = talib.ATR(prices_array, prices_array, prices_array, timeperiod=14)[-1]  # ATR sur 14 périodes
+    atr = talib.ATR(highs, lows, closes, timeperiod=14)[-1]  # ATR sur 14 périodes
     
     # Bandes de Bollinger : Calculées en fonction de la SMA et de l'ATR
-    upper_band, middle_band, lower_band = talib.BBANDS(prices_array, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
+    upper_band, middle_band, lower_band = talib.BBANDS(closes, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
     
     # RSI (Relative Strength Index) sur 14 périodes
-    rsi = talib.RSI(prices_array, timeperiod=14)[-1]
+    rsi = talib.RSI(closes, timeperiod=14)[-1]
     
     # Stochastique : Calculs classiques avec %K et %D
-    slowk, slowd = talib.STOCH(prices_array, prices_array, prices_array, fastk_period=14, slowk_period=3, slowd_period=3)
+    slowk, slowd = talib.STOCH(highs, lows, closes, fastk_period=14, slowk_period=3, slowd_period=3)
     
     logging.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}")
     
@@ -168,7 +173,7 @@ def calculate_indicators(prices):
         "Stochastic_K": slowk[-1],
         "Stochastic_D": slowd[-1],
     }
-
+    
 # Calcul du Stop Loss et Take Profit en pourcentage du prix d'entrée
 def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
     """
@@ -204,14 +209,18 @@ def analyze_signals(prices):
     return decision
 
 # Appel de la fonction d'analyse
-signal = analyze_signals(prices)
-print(signal)
+for crypto in CRYPTO_LIST:
+    prices, opens, highs, lows, closes, volumes = fetch_historical_data(crypto)
+    
+    if prices:
+        signal = analyze_signals(prices)
+        print(f"Signal pour {crypto}: {signal}")
+    else:
+        print(f"Erreur de récupération des données pour {crypto}.")
 
 # Appeler la fonction analyze_signals avec la variable prices définie
 decision = analyze_signals(prices)
 print(decision)  # Affichera la décision d'achat/vente
-
-import asyncio
 
 # Envoi asynchrone d'un message Telegram
 async def send_telegram_message(chat_id, message):
@@ -221,9 +230,12 @@ async def send_telegram_message(chat_id, message):
     except Exception as e:
         logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
 
+# Événement global pour gérer l'arrêt des tâches
+STOP_EVENT = asyncio.Event()
+
 # Fonction principale de vérification périodique
 async def periodic_price_check():
-    while True:
+    while not STOP_EVENT.is_set():  # Vérifie si STOP_EVENT est activé
         for symbol in CRYPTO_LIST:
             prices = fetch_historical_data(symbol, CURRENCY)
             if prices:
@@ -234,24 +246,32 @@ async def periodic_price_check():
                     message = f"Signal de trading pour {symbol}/{CURRENCY}: {signal}"
                     await send_telegram_message(CHAT_ID, message)
             else:
-                logging.error("Impossible d'analyser les données, données non disponibles.")
+                logging.error(f"Impossible d'analyser les données pour {symbol}, données non disponibles.")
         
-        await asyncio.sleep(900)
-        
-# Appel de la fonction périodique sans passer les variables explicitement
+        await asyncio.sleep(900)  # Pause de 15 minutes
+
+# Appel de la fonction périodique avec gestion de l'arrêt
 async def start_periodic_task():
-    await periodic_price_check()
-
-# Lance la tâche
-asyncio.run(start_periodic_task())
-
-# Notification d'erreur en cas d'exception
-async def notify_error(message):
     try:
-        await bot.send_message(chat_id=CHAT_ID, text=message)
-        logging.info(f"Notification d'erreur envoyée : {message}")
-    except Exception as e:
-        logging.error(f"Erreur lors de l'envoi de la notification d'erreur : {e}")
+        # Crée une liste de tâches asyncio
+        tasks = [
+            asyncio.create_task(periodic_price_check())
+        ]
+
+        # Attend que toutes les tâches s'exécutent jusqu'à l'arrêt
+        await asyncio.gather(*tasks)
+    except asyncio.CancelledError:
+        logging.info("Tâches asyncio annulées.")
+    finally:
+        STOP_EVENT.set()  # Déclenche l'arrêt propre
+
+# Gestionnaire principal
+if __name__ == "__main__":
+    try:
+        asyncio.run(start_periodic_task())  # Lance la tâche principale
+    except KeyboardInterrupt:
+        STOP_EVENT.set()  # Permet d'arrêter les tâches avec Ctrl+C
+        logging.info("Arrêt demandé par l'utilisateur.")
 
 # Journalisation des signaux
 def log_signal(signal, indicators, prices):
