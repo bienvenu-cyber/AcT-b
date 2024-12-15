@@ -70,13 +70,13 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
     """
     base_url = "https://min-api.cryptocompare.com/data/v2/"
     
-    # Déterminer le bon endpoint en fonction de l'intervalle
-       if interval == "hour":
-        endpoint = "histohour"
-       elif interval == "day":
-        endpoint = "histoday"
-       else:
-        raise ValueError("Intervalle non supporté. Utilisez 'hour' ou 'day'.")
+# Déterminer le bon endpoint en fonction de l'intervalle
+if interval == "hour":
+    endpoint = "histohour"
+elif interval == "day":
+    endpoint = "histoday"
+else:
+    raise ValueError("Intervalle non supporté. Utilisez 'hour' ou 'day'.")
     
     url = f"{base_url}{endpoint}"
     params = {
