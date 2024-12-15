@@ -43,6 +43,7 @@ bot = Bot(token=TELEGRAM_TOKEN)
 app = Flask(__name__)
 
 # Constantes
+CURRENCY = "USD"
 CRYPTO_LIST = ["BTC", "ETH", "XRP"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
@@ -343,8 +344,8 @@ async def safe_trading_task():
         await trading_task()
     except Exception as e:
         logging.error(f"Erreur globale dans trading_task: {e}")
-        await notify_error(f"Erreur critique détectée : {e}")
-        sys.exit(1)  # Arrêt propre
+        await notify_error(f"Erreur critique détectée : {e}")  # Envoie d'une notification Telegram en cas d'erreur
+        raise  # Relance l'exception pour permettre à l'application de la gérer proprement
 
 # Gestion des signaux d'arrêt et redémarrage automatique
 def handle_shutdown_signal(signum, frame):
@@ -376,11 +377,19 @@ def log_performance():
     logging.info(f"RAM totale: {memory_info.total / (1024 * 1024)} MB")
     logging.info(f"RAM disponible: {memory_info.available / (1024 * 1024)} MB")
 
-# Ajout du gestionnaire de signaux
-signal.signal(signal.SIGTERM, handle_shutdown_signal)
+# Gestion asynchrone des signaux avec asyncio
+def configure_signal_handlers(loop):
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(handle_shutdown_signal(sig, None)))
 
-from flask import Flask, jsonify
-from threading import Thread
+async def handle_shutdown_signal(signum, frame):
+    logging.info(f"Signal d'arrêt reçu : {signum}")
+    # Arrêt propre des tâches asynchrones
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    for task in tasks:
+        task.cancel()
+    await asyncio.gather(*tasks, return_exceptions=True)
+    sys.exit(0)
 
 app = Flask(__name__)
 
@@ -390,8 +399,8 @@ def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
 # Lancer Flask sur un thread séparé
-    # Fonction correctement indentée
 def run_flask():
+    """Lance Flask sur un thread séparé."""
     from threading import Thread
     Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
 
