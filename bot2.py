@@ -396,7 +396,9 @@ def run_flask():
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
+        logging.debug("Démarrage du bot")
         if __name__ == "__main__":
+            logging.debug("Lancement du loop asyncio")
             loop = asyncio.get_event_loop()
             loop.run_until_complete(safe_trading_task())
     except KeyboardInterrupt:
