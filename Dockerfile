@@ -33,7 +33,7 @@ COPY bot2.py /app/bot2.py
 # Ajouter les variables d'environnement (TOKEN et CHAT_ID)
 ENV TELEGRAM_TOKEN=8052620219:AAEnP3ksiFUV3dEPf7Fpzyu3W_-Kg4jfXQ0
 ENV CHAT_ID=1963161645
-ENV PORT=8001
+ENV PORT=8002
 
 # Installer les dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
