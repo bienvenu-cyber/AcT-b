@@ -428,16 +428,17 @@ def run_flask():
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
-     
         if __name__ == "__main__":
             loop = asyncio.get_event_loop()
 
-    # Configure la gestion des signaux pour un arrêt propre
-    configure_signal_handlers(loop)
+            # Configure la gestion des signaux pour un arrêt propre
+            configure_signal_handlers(loop)
 
-    try:
-        # Démarre la tâche de trading principale
-        asyncio.run(safe_trading_task())  # Remplace asyncio.run(safe_trading_task()) par asyncio.run(main())
+            # Démarre la tâche de trading principale
+            asyncio.run(safe_trading_task())  # Remplace asyncio.run(safe_trading_task()) par asyncio.run(main())
     except KeyboardInterrupt:
         logging.info("Exécution interrompue manuellement.")
         sys.exit(0)
+    except Exception as e:
+        logging.error(f"Erreur inattendue : {e}")
+        sys.exit(1)
