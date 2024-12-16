@@ -417,11 +417,13 @@ def run_flask():
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
         if __name__ == "__main__":
-    try:
-        asyncio.run(safe_trading_task())  # ou toute autre fonction principale que tu veux exécuter
-    except KeyboardInterrupt:
-        logging.info("Exécution interrompue manuellement.")
-        sys.exit(0)
+            try:
+                asyncio.run(safe_trading_task())  # ou toute autre fonction principale que tu veux exécuter
+            except KeyboardInterrupt:
+                logging.info("Exécution interrompue manuellement.")
+                sys.exit(0)
+            except Exception as e:
+                logging.error(f"Erreur inattendue : {e}")
+                sys.exit(1)
     except Exception as e:
-        logging.error(f"Erreur inattendue : {e}")
-        sys.exit(1)
+        logging.error(f"Erreur au démarrage du bot : {e}")
