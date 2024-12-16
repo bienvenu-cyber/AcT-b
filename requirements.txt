@@ -20,4 +20,4 @@ pytest
 flake8
 black
 tensorflow
-aiohttp
+aiohttp==3.8.6
