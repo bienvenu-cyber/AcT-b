@@ -430,7 +430,7 @@ if TELEGRAM_TOKEN and CHAT_ID:
     try:
      
         if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
+            loop = asyncio.get_event_loop()
 
     # Configure la gestion des signaux pour un arrêt propre
     configure_signal_handlers(loop)
