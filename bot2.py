@@ -15,7 +15,6 @@ import objgraph  # Pour la détection des fuites de mémoire
 import platform
 import subprocess
 import talib
-import subprocess
 import psutil
 import random
 import logging
@@ -30,9 +29,6 @@ tracemalloc.start()
 handler = RotatingFileHandler('bot_trading.log', maxBytes=5*1024*1024, backupCount=3)  # Taille max de 5 Mo et 3 backups
 handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(handler)
-
-# Configuration du niveau de log et du format
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Création du logger
 logger = logging.getLogger(__name__)
@@ -84,7 +80,7 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
         "limit": limit,
         "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
     }
-    
+
     attempt = 0  # Compteur de tentatives
     while attempt < max_retries:
         try:
@@ -93,9 +89,9 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
             data = response.json()
 
             # Validation des données
-            if data.get("Response") == "Success" and "Data" in data and "Data" in data["Data"]:
+            if data.get("Response") == "Success" and "Data" in data:
                 prices = []
-                for item in data["Data"]["Data"]:
+                for item in data["Data"].get("Data", []):
                     # Vérifiez que toutes les clés nécessaires sont présentes
                     if all(key in item for key in ["time", "open", "high", "low", "close", "volumeto"]):
                         prices.append({
@@ -119,22 +115,22 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
 
             else:
                 logging.error(f"Erreur API : {data.get('Message', 'Données invalides.')}")
-                return None
+                return [], [], [], [], [], []
 
         except requests.exceptions.RequestException as e:
             attempt += 1
             if attempt >= max_retries:
                 logging.error(f"Échec après {max_retries} tentatives : {e}")
-                return None
+                return [], [], [], [], [], []
             logging.warning(f"Tentative {attempt}/{max_retries} échouée, nouvelle tentative dans {backoff_factor ** attempt} secondes.")
             time.sleep(backoff_factor ** attempt)
 
         except Exception as e:
             logging.error(f"Erreur inattendue : {e}")
-            return None
+            return [], [], [], [], [], []
 
     logging.error(f"Échec définitif pour {crypto_symbol}.")
-    return None
+    return [], [], [], [], [], []
 
 # Fonction de calcul des indicateurs avec TA-Lib
 def calculate_indicators(prices):
@@ -239,9 +235,11 @@ async def send_telegram_message(chat_id, message):
     try:
         await bot.send_message(chat_id=chat_id, text=message)
         logging.info(f"Message Telegram envoyé : {message}")
+    except aiohttp.ClientError as e:
+        logging.error(f"Erreur réseau lors de l'envoi Telegram : {e}")
     except Exception as e:
-        logging.error(f"Erreur d'envoi Telegram : {e.__class__.__name__} - {e}")
-
+        logging.error(f"Erreur inattendue : {e}")
+        
 # Événement global pour gérer l'arrêt des tâches
 STOP_EVENT = asyncio.Event()
 
@@ -350,24 +348,6 @@ async def safe_trading_task():
         await notify_error(f"Erreur critique détectée : {e}")  # Envoie d'une notification Telegram en cas d'erreur
         raise  # Relance l'exception pour permettre à l'application de la gérer proprement
 
-# Gestion des signaux d'arrêt et redémarrage automatique
-def handle_shutdown_signal(signum, frame):
-    try:
-        logging.info("Arrêt de l'application (Signal: %s)", signum)
-        logging.info("Redémarrage de l'application...")
-        
-        # Vérification du système d'exploitation pour effectuer une action spécifique
-        if platform.system() == "Darwin":  # Si macOS
-            subprocess.call(["osascript", "-e", "tell application \"Terminal\" to quit"])
-        
-        # Attendre un peu avant de quitter
-        time.sleep(2)
-    except Exception as e:
-        logging.error(f"Erreur lors du traitement du signal d'arrêt: {e}")
-    finally:
-        # Quitter proprement l'application
-        sys.exit(0)
-
 # Log des performances
 def log_performance():
     # Exemple simple pour loguer l'utilisation du CPU et de la mémoire
@@ -417,13 +397,11 @@ def run_flask():
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
         if __name__ == "__main__":
-            try:
-                asyncio.run(safe_trading_task())  # ou toute autre fonction principale que tu veux exécuter
-            except KeyboardInterrupt:
-                logging.info("Exécution interrompue manuellement.")
-                sys.exit(0)
-            except Exception as e:
-                logging.error(f"Erreur inattendue : {e}")
-                sys.exit(1)
+    try:
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(safe_trading_task())
+    except KeyboardInterrupt:
+        logging.info("Exécution interrompue manuellement.")
     except Exception as e:
-        logging.error(f"Erreur au démarrage du bot : {e}")
+        logging.error(f"Erreur inattendue : {e}")
+        sys.exit(1)
