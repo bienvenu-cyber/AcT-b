@@ -15,19 +15,29 @@ import objgraph  # Pour la détection des fuites de mémoire
 import platform
 import subprocess
 import talib
-import sys
-import platform
 import subprocess
 import psutil
-import time
 import random
+import logging
+from logging.handlers import RotatingFileHandler
+from threading import Thread
+
 # Activer la surveillance de la mémoire
 tracemalloc.start()
 
-# Configuration des logs
+# Configuration du gestionnaire de logs avec rotation des fichiers
+handler = RotatingFileHandler('bot_trading.log', maxBytes=5*1024*1024, backupCount=3)  # Taille max de 5 Mo et 3 backups
+handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+logging.getLogger().addHandler(handler)
+
+# Configuration du niveau de log et du format
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+# Création du logger
 logger = logging.getLogger(__name__)
-logging.debug("Démarrage de l'application.")
+
+# Exemple de log de démarrage
+logger.debug("Démarrage de l'application.")
 
 # Variables d'environnement
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -377,19 +387,31 @@ def log_performance():
     logging.info(f"RAM totale: {memory_info.total / (1024 * 1024)} MB")
     logging.info(f"RAM disponible: {memory_info.available / (1024 * 1024)} MB")
 
-# Gestion asynchrone des signaux avec asyncio
-def configure_signal_handlers(loop):
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(handle_shutdown_signal(sig, None)))
+import asyncio
+import signal
+import logging
+import sys
 
+# Fonction pour gérer l'arrêt propre des tâches asynchrones
 async def handle_shutdown_signal(signum, frame):
     logging.info(f"Signal d'arrêt reçu : {signum}")
-    # Arrêt propre des tâches asynchrones
+    
+    # Annuler toutes les tâches en cours, sauf la tâche courante
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    
     for task in tasks:
         task.cancel()
+    
+    # Attendre la fin des tâches annulées
     await asyncio.gather(*tasks, return_exceptions=True)
+    
+    logging.info("Arrêt propre du bot.")
     sys.exit(0)
+
+# Fonction pour configurer les gestionnaires de signaux
+def configure_signal_handlers(loop):
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda sig=sig: asyncio.create_task(handle_shutdown_signal(sig, None)))
 
 app = Flask(__name__)
 
@@ -401,14 +423,21 @@ def home():
 # Lancer Flask sur un thread séparé
 def run_flask():
     """Lance Flask sur un thread séparé."""
-    from threading import Thread
     Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
 
 # Test manuel au démarrage du bot
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
-        # Suppression d'asyncio, et on lance simplement la tâche de trading.
-        safe_trading_task()
+     
+        if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+
+    # Configure la gestion des signaux pour un arrêt propre
+    configure_signal_handlers(loop)
+
+    try:
+        # Démarre la tâche de trading principale
+        asyncio.run(safe_trading_task())  # Remplace asyncio.run(safe_trading_task()) par asyncio.run(main())
     except KeyboardInterrupt:
         logging.info("Exécution interrompue manuellement.")
         sys.exit(0)
