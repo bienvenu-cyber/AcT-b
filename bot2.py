@@ -21,6 +21,7 @@ import random
 import logging
 from logging.handlers import RotatingFileHandler
 from threading import Thread
+import aiohttp
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
@@ -276,14 +277,6 @@ async def start_periodic_task():
     finally:
         STOP_EVENT.set()  # Déclenche l'arrêt propre
 
-# Gestionnaire principal
-if __name__ == "__main__":
-    try:
-        asyncio.run(start_periodic_task())  # Lance la tâche principale
-    except KeyboardInterrupt:
-        STOP_EVENT.set()  # Permet d'arrêter les tâches avec Ctrl+C
-        logging.info("Arrêt demandé par l'utilisateur.")
-
 # Journalisation des signaux
 def log_signal(signal, indicators, prices):
     df = pd.DataFrame([{
@@ -387,11 +380,6 @@ def log_performance():
     logging.info(f"RAM totale: {memory_info.total / (1024 * 1024)} MB")
     logging.info(f"RAM disponible: {memory_info.available / (1024 * 1024)} MB")
 
-import asyncio
-import signal
-import logging
-import sys
-
 # Fonction pour gérer l'arrêt propre des tâches asynchrones
 async def handle_shutdown_signal(signum, frame):
     logging.info(f"Signal d'arrêt reçu : {signum}")
@@ -429,13 +417,8 @@ def run_flask():
 if TELEGRAM_TOKEN and CHAT_ID:
     try:
         if __name__ == "__main__":
-            loop = asyncio.get_event_loop()
-
-            # Configure la gestion des signaux pour un arrêt propre
-            configure_signal_handlers(loop)
-
-            # Démarre la tâche de trading principale
-            asyncio.run(safe_trading_task())  # Remplace asyncio.run(safe_trading_task()) par asyncio.run(main())
+    try:
+        asyncio.run(safe_trading_task())  # ou toute autre fonction principale que tu veux exécuter
     except KeyboardInterrupt:
         logging.info("Exécution interrompue manuellement.")
         sys.exit(0)
