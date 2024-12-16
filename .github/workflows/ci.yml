@@ -20,4 +20,4 @@ jobs:
     # Run Docker container
     - name: Run Docker container
       run: |
-        docker run -d -p 8001:8001 my-bot
+        docker run -d -p 8002:8002 my-bot
