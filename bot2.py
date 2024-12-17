@@ -39,7 +39,7 @@ logger.debug("Démarrage de l'application.")
 # Variables d'environnement
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
-PORT = int(os.getenv("PORT", 8001))
+PORT = int(os.getenv("PORT", 8002))
 
 if not TELEGRAM_TOKEN or not CHAT_ID:
     raise ValueError("Les variables d'environnement TELEGRAM_TOKEN ou CHAT_ID ne sont pas définies.")
@@ -388,21 +388,27 @@ app = Flask(__name__)
 def home():
     return jsonify({"status": "Bot de trading opérationnel."})
 
-# Lancer Flask sur un thread séparé
-def run_flask():
-    """Lance Flask sur un thread séparé."""
-    Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': PORT, 'threaded': True, 'use_reloader': False}).start()
+# Lancer Flask dans un thread séparé
+async def run_flask():
+    """Exécute Flask dans un thread séparé via asyncio."""
+    await asyncio.to_thread(app.run, host='0.0.0.0', port=PORT, threaded=True, use_reloader=False)
 
-# Test manuel au démarrage du bot
-if TELEGRAM_TOKEN and CHAT_ID:
+# Démarrer les tâches asyncio et Flask en parallèle
+async def main():
+    # Lancer les tâches asyncio
+    await asyncio.gather(
+        trading_task(),  # Ta tâche principale
+        run_flask()      # Flask
+    )
+
+# Point d'entrée principal
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     try:
-        logging.debug("Démarrage du bot")
-        if __name__ == "__main__":
-            logging.debug("Lancement du loop asyncio")
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(safe_trading_task())
+        asyncio.run(main())
     except KeyboardInterrupt:
-        logging.info("Exécution interrompue manuellement.")
+        logging.info("Exécution interrompue par l'utilisateur.")
     except Exception as e:
         logging.error(f"Erreur inattendue : {e}")
-        sys.exit(1)
+    finally:
+        logging.info("Arrêt complet.")
