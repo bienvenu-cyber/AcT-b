@@ -25,6 +25,8 @@ import aiohttp
 # Activer la surveillance de la mémoire
 tracemalloc.start()
 
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
 # Configuration du gestionnaire de logs avec rotation des fichiers
 handler = RotatingFileHandler('bot_trading.log', maxBytes=5*1024*1024, backupCount=3)  # Taille max de 5 Mo et 3 backups
 handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
