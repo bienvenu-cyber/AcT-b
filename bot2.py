@@ -297,7 +297,24 @@ def log_signal(signal, indicators, prices):
 
     logging.debug(f"Signal logué : {signal} à {prices[-1]}")
 
-# Tâche périodique
+# Fonction asynchrone d'envoi de message Telegram
+async def send_telegram_message(chat_id, message):
+    try:
+        logging.debug(f"Envoi du message à Telegram pour le chat {chat_id}: {message}")
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        
+        # Utilisation d'aiohttp pour envoyer des messages de manière non-bloquante
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, params={"chat_id": chat_id, "text": message}) as response:
+                response.raise_for_status()  # Vérifie si la requête a échoué
+                logging.debug(f"Message envoyé avec succès. Réponse: {await response.json()}")
+    except aiohttp.ClientError as e:
+        logging.error(f"Erreur lors de l'envoi du message à Telegram: {e}")
+        log_memory_usage()  # Log de la mémoire et des performances
+        # Attendre avant la prochaine itération (900 secondes = 15 minutes)
+        await asyncio.sleep(900)
+
+# Tâche périodique de trading
 async def trading_task():
     while True:
         logging.info("Début d'une nouvelle itération de trading.")
@@ -329,11 +346,16 @@ async def trading_task():
             else:
                 logging.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
         
-        # Log de la mémoire et des performances
-        log_memory_usage()
+        # Attendre un certain délai avant la prochaine itération (par exemple, 10 minutes)
+        await asyncio.sleep(600)  # 600 secondes = 10 minutes
 
-        # Attendre avant la prochaine itération (900 secondes = 15 minutes)
-        await asyncio.sleep(900)
+# Fonction pour enregistrer l'utilisation de la mémoire
+def log_memory_usage():
+    # Log de la mémoire (exemple de code pour enregistrer la mémoire)
+    import psutil
+    process = psutil.Process(os.getpid())
+    memory_info = process.memory_info()
+    logging.debug(f"Utilisation de la mémoire - RSS: {memory_info.rss / (1024 * 1024)} MB")
 
 # Fonction pour surveiller l'utilisation de la mémoire
 def log_memory_usage():
@@ -343,12 +365,14 @@ def log_memory_usage():
 
 # Fonction de sécurité pour le trading task
 async def safe_trading_task():
-    try:
-        await trading_task()
-    except Exception as e:
-        logging.error(f"Erreur globale dans trading_task: {e}")
-        await notify_error(f"Erreur critique détectée : {e}")  # Envoie d'une notification Telegram en cas d'erreur
-        raise  # Relance l'exception pour permettre à l'application de la gérer proprement
+    while True:  # Essaye de redémarrer la tâche tant que cela échoue
+        try:
+            await trading_task()
+            break  # Sort de la boucle si tout fonctionne
+        except Exception as e:
+            logging.error(f"Erreur globale dans trading_task: {str(e)}", exc_info=True)
+            await notify_error(f"Erreur critique détectée : {str(e)}")  # Notification d'erreur
+            await asyncio.sleep(10)  # Attends un peu avant de réessayer
 
 # Log des performances
 def log_performance():
