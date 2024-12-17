@@ -21,6 +21,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from threading import Thread
 import aiohttp
+import functools
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
@@ -43,9 +44,14 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("CHAT_ID")
 PORT = int(os.getenv("PORT", 8002))
 
-if not TELEGRAM_TOKEN or not CHAT_ID:
-    raise ValueError("Les variables d'environnement TELEGRAM_TOKEN ou CHAT_ID ne sont pas définies.")
+if not TELEGRAM_TOKEN:
+    logging.error("La variable d'environnement TELEGRAM_TOKEN est manquante. Veuillez la définir.")
+    sys.exit(1)
 
+if not CHAT_ID:
+    logging.error("La variable d'environnement CHAT_ID est manquante. Veuillez la définir.")
+    sys.exit(1)
+    
 bot = Bot(token=TELEGRAM_TOKEN)
 
 # Initialisation de Flask
@@ -53,7 +59,7 @@ app = Flask(__name__)
 
 # Constantes
 CURRENCY = "USD"
-CRYPTO_LIST = ["BTC", "ETH", "XRP"]
+CRYPTO_LIST = ["BTC", "ETH", "EUR"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -133,6 +139,10 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
 
     logging.error(f"Échec définitif pour {crypto_symbol}.")
     return [], [], [], [], [], []
+
+@functools.lru_cache(maxsize=128)  # Cache les résultats pour les 128 dernières requêtes
+def fetch_data_cached(symbol, convert, limit=2000):
+    return fetch_data_with_logging(symbol, convert, limit)
 
 # Fonction de calcul des indicateurs avec TA-Lib
 def calculate_indicators(prices):
@@ -308,14 +318,24 @@ async def send_telegram_message(chat_id, message):
             async with session.get(url, params={"chat_id": chat_id, "text": message}) as response:
                 response.raise_for_status()  # Vérifie si la requête a échoué
                 logging.debug(f"Message envoyé avec succès. Réponse: {await response.json()}")
+    except aiohttp.ClientResponseError as e:
+        logging.error(f"Erreur HTTP lors de l'envoi du message à Telegram: {e}")
+    except aiohttp.ClientConnectionError as e:
+        logging.error(f"Erreur de connexion lors de l'envoi du message à Telegram: {e}")
     except aiohttp.ClientError as e:
-        logging.error(f"Erreur lors de l'envoi du message à Telegram: {e}")
-        log_memory_usage()  # Log de la mémoire et des performances
-        # Attendre avant la prochaine itération (900 secondes = 15 minutes)
+        logging.error(f"Erreur générale lors de l'envoi du message à Telegram: {e}")
+    except Exception as e:
+        logging.error(f"Erreur inattendue lors de l'envoi du message à Telegram: {e}")
+    finally:
+        # Log de la mémoire et des performances
+        log_memory_usage()
+        # Attendre avant la prochaine itération (900 secondes = 15 minutes) en cas d'erreur
         await asyncio.sleep(900)
 
 # Tâche périodique de trading
 async def trading_task():
+    last_sent_signals = {}  # Dictionnaire pour suivre les signaux envoyés
+    
     while True:
         logging.info("Début d'une nouvelle itération de trading.")
         
@@ -329,6 +349,14 @@ async def trading_task():
                 
                 # Si un signal est généré (Achat/Vente)
                 if signal:
+                    # Vérifier si ce signal a déjà été envoyé récemment
+                    if last_sent_signals.get(crypto) == signal:
+                        logging.info(f"Signal déjà envoyé pour {crypto}. Ignoré.")
+                        continue  # Ignorer si signal déjà envoyé
+                    
+                    # Mettre à jour le signal envoyé
+                    last_sent_signals[crypto] = signal
+                    
                     # Calcul du Stop Loss et Take Profit pour le dernier prix (prix d'entrée)
                     entry_price = prices[-1]["close"]  # On utilise ici le dernier prix de clôture
                     sl_price, tp_price = calculate_sl_tp(entry_price)
@@ -348,14 +376,6 @@ async def trading_task():
         
         # Attendre un certain délai avant la prochaine itération (par exemple, 10 minutes)
         await asyncio.sleep(600)  # 600 secondes = 10 minutes
-
-# Fonction pour enregistrer l'utilisation de la mémoire
-def log_memory_usage():
-    # Log de la mémoire (exemple de code pour enregistrer la mémoire)
-    import psutil
-    process = psutil.Process(os.getpid())
-    memory_info = process.memory_info()
-    logging.debug(f"Utilisation de la mémoire - RSS: {memory_info.rss / (1024 * 1024)} MB")
 
 # Fonction pour surveiller l'utilisation de la mémoire
 def log_memory_usage():
