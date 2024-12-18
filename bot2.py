@@ -266,6 +266,9 @@ async def main():
             prices, opens, highs, lows, closes, volumes = await fetch_historical_data(crypto)
             
             if prices:  # Vérifiez si des données ont été récupérées
+                # Afficher les 5 premiers éléments des prix pour validation
+                print(f"Premiers 5 éléments de données pour {crypto}: {prices[:5]}")  
+                
                 # Appeler la fonction analyze_signals avec la variable prices définie
                 decision = analyze_signals(prices)
                 print(f"Décision pour {crypto}: {decision}")  # Affichera la décision d'achat/vente
@@ -473,6 +476,10 @@ async def main():
 # Point d'entrée principal
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    
+    # Envoyer un message de test au démarrage
+    send_telegram_alert("Le bot de trading a démarré avec succès.")
+    
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
