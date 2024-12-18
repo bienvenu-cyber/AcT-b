@@ -247,15 +247,17 @@ def analyze_signals(prices):
     return decision
 
 # Appel de la fonction d'analyse
-for crypto in CRYPTO_LIST:
-    prices, opens, highs, lows, closes, volumes = await fetch_historical_data(crypto)
-    
-    if prices:
-        signal = analyze_signals(prices)
-        print(f"Signal pour {crypto}: {signal}")
-    else:
-        print(f"Erreur de récupération des données pour {crypto}.")
+async def main():
+    # Appel de la fonction d'analyse
+    for crypto in CRYPTO_LIST:
+        prices, opens, highs, lows, closes, volumes = await fetch_historical_data(crypto)
         
+        if prices:
+            signal = analyze_signals(prices)
+            print(f"Signal pour {crypto}: {signal}")
+        else:
+            print(f"Erreur de récupération des données pour {crypto}.")
+
 # Appeler la fonction analyze_signals avec la variable prices définie
 decision = analyze_signals(prices)
 print(decision)  # Affichera la décision d'achat/vente
