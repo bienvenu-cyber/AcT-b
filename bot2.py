@@ -66,10 +66,12 @@ PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
 logging.basicConfig(level=logging.DEBUG)
-# Récupération des données historiques pour les cryptomonnaies
-def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=2000, max_retries=5, backoff_factor=2):
+
+# Récupération des données historiques pour les cryptomonnaies de manière asynchrone
+async def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=2000, max_retries=5, backoff_factor=2):
     """
     Récupère les données historiques pour une cryptomonnaie donnée.
+    Utilise aiohttp pour effectuer des appels API asynchrones.
     """
     base_url = "https://min-api.cryptocompare.com/data/v2/"
 
@@ -90,55 +92,75 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
     }
 
     attempt = 0  # Compteur de tentatives
-    while attempt < max_retries:
-        try:
-            response = requests.get(url, params=params)
-            response.raise_for_status()
-            data = response.json()
+    async with aiohttp.ClientSession() as session:
+        while attempt < max_retries:
+            try:
+                async with session.get(url, params=params) as response:
+                    response.raise_for_status()
+                    data = await response.json()
 
-            # Validation des données
-            if data.get("Response") == "Success" and "Data" in data:
-                prices = []
-                for item in data["Data"].get("Data", []):
-                    # Vérifiez que toutes les clés nécessaires sont présentes
-                    if all(key in item for key in ["time", "open", "high", "low", "close", "volumeto"]):
-                        prices.append({
-                            "time": item["time"],
-                            "open": item["open"],
-                            "high": item["high"],
-                            "low": item["low"],
-                            "close": item["close"],
-                            "volume": item["volumeto"]
-                        })
+                    # Validation des données
+                    if data.get("Response") == "Success" and "Data" in data:
+                        prices = []
+                        for item in data["Data"].get("Data", []):
+                            # Vérifie que toutes les clés nécessaires sont présentes
+                            if all(key in item for key in ["time", "open", "high", "low", "close", "volumeto"]):
+                                prices.append({
+                                    "time": item["time"],
+                                    "open": item["open"],
+                                    "high": item["high"],
+                                    "low": item["low"],
+                                    "close": item["close"],
+                                    "volume": item["volumeto"]
+                                })
 
-                # Extraire les valeurs pour les indicateurs
-                opens = np.array([item["open"] for item in prices])
-                highs = np.array([item["high"] for item in prices])
-                lows = np.array([item["low"] for item in prices])
-                closes = np.array([item["close"] for item in prices])
-                volumes = np.array([item["volume"] for item in prices])
+                        # Extraire les valeurs pour les indicateurs
+                        opens = np.array([item["open"] for item in prices])
+                        highs = np.array([item["high"] for item in prices])
+                        lows = np.array([item["low"] for item in prices])
+                        closes = np.array([item["close"] for item in prices])
+                        volumes = np.array([item["volume"] for item in prices])
 
-                logging.debug(f"Données récupérées pour {crypto_symbol}: {len(prices)} éléments.")
-                return prices, opens, highs, lows, closes, volumes
+                        logging.debug(f"Données récupérées pour {crypto_symbol}: {len(prices)} éléments.")
+                        return prices, opens, highs, lows, closes, volumes
 
-            else:
-                logging.error(f"Erreur API : {data.get('Message', 'Données invalides.')}")
+                    else:
+                        logging.error(f"Erreur API : {data.get('Message', 'Données invalides.')}")
+                        return [], [], [], [], [], []
+
+            except aiohttp.ClientError as e:
+                attempt += 1
+                if attempt >= max_retries:
+                    logging.error(f"Échec après {max_retries} tentatives : {e}")
+                    return [], [], [], [], [], []
+                logging.warning(f"Tentative {attempt}/{max_retries} échouée, nouvelle tentative dans {backoff_factor ** attempt} secondes.")
+                await asyncio.sleep(backoff_factor ** attempt)
+
+            except Exception as e:
+                logging.error(f"Erreur inattendue : {e}")
                 return [], [], [], [], [], []
-
-        except requests.exceptions.RequestException as e:
-            attempt += 1
-            if attempt >= max_retries:
-                logging.error(f"Échec après {max_retries} tentatives : {e}")
-                return [], [], [], [], [], []
-            logging.warning(f"Tentative {attempt}/{max_retries} échouée, nouvelle tentative dans {backoff_factor ** attempt} secondes.")
-            time.sleep(backoff_factor ** attempt)
-
-        except Exception as e:
-            logging.error(f"Erreur inattendue : {e}")
-            return [], [], [], [], [], []
 
     logging.error(f"Échec définitif pour {crypto_symbol}.")
     return [], [], [], [], [], []
+
+# Fonction principale pour récupérer les données de plusieurs cryptomonnaies de manière asynchrone
+async def main():
+    crypto_symbols = ["BTC", "ETH", "EUR"]
+    tasks = [fetch_historical_data(symbol) for symbol in crypto_symbols]
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    for symbol, result in zip(crypto_symbols, results):
+        if result:
+            prices, opens, highs, lows, closes, volumes = result
+            logging.info(f"Données pour {symbol} récupérées: {len(prices)} éléments")
+        else:
+            logging.error(f"Aucune donnée récupérée pour {symbol}.")
+
+# Exécution du programme asynchrone
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    asyncio.run(main())
 
 # Fonction de calcul des indicateurs avec TA-Lib
 def calculate_indicators(prices):
@@ -238,16 +260,6 @@ for crypto in CRYPTO_LIST:
 decision = analyze_signals(prices)
 print(decision)  # Affichera la décision d'achat/vente
 
-# Envoi asynchrone d'un message Telegram
-async def send_telegram_message(chat_id, message):
-    try:
-        await bot.send_message(chat_id=chat_id, text=message)
-        logging.info(f"Message Telegram envoyé : {message}")
-    except aiohttp.ClientError as e:
-        logging.error(f"Erreur réseau lors de l'envoi Telegram : {e}")
-    except Exception as e:
-        logging.error(f"Erreur inattendue : {e}")
-        
 # Événement global pour gérer l'arrêt des tâches
 STOP_EVENT = asyncio.Event()
 
