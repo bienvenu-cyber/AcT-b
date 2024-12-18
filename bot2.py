@@ -400,7 +400,7 @@ async def trading_task():
                 logging.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
         
         # Attendre un certain délai avant la prochaine itération (par exemple, 10 minutes)
-        await asyncio.sleep(600)  # 600 secondes = 10 minutes
+        await asyncio.sleep(600)  # 900 secondes = 15 minutes
 
 # Fonction pour surveiller l'utilisation de la mémoire
 def log_memory_usage():
