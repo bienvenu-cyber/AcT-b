@@ -59,7 +59,7 @@ app = Flask(__name__)
 
 # Constantes
 CURRENCY = "USD"
-CRYPTO_LIST = ["BTC", "ETH", "EUR"]
+CRYPTO_LIST = ["BTC", "ETH", "XRP"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -259,8 +259,20 @@ async def main():
             print(f"Erreur de récupération des données pour {crypto}.")
 
 # Appeler la fonction analyze_signals avec la variable prices définie
-decision = analyze_signals(prices)
-print(decision)  # Affichera la décision d'achat/vente
+async def main():
+    for crypto in CRYPTO_LIST:  # CRYPTO_LIST contient les cryptomonnaies à analyser
+        try:
+            # Récupérer les données
+            prices, opens, highs, lows, closes, volumes = await fetch_historical_data(crypto)
+            
+            if prices:  # Vérifiez si des données ont été récupérées
+                # Appeler la fonction analyze_signals avec la variable prices définie
+                decision = analyze_signals(prices)
+                print(f"Décision pour {crypto}: {decision}")  # Affichera la décision d'achat/vente
+            else:
+                print(f"Les données pour {crypto} sont vides ou invalides.")
+        except Exception as e:
+            print(f"Erreur lors du traitement pour {crypto}: {e}")
 
 # Événement global pour gérer l'arrêt des tâches
 STOP_EVENT = asyncio.Event()
