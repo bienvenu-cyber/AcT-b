@@ -478,7 +478,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
     # Envoyer un message de test au démarrage
-    send_telegram_alert("Le bot de trading a démarré avec succès.")
+    send_telegram_message("Le bot de trading a démarré avec succès.")
     
     try:
         asyncio.run(main())
