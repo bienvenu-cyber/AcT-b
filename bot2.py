@@ -140,10 +140,6 @@ def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=
     logging.error(f"Échec définitif pour {crypto_symbol}.")
     return [], [], [], [], [], []
 
-@functools.lru_cache(maxsize=128)  # Cache les résultats pour les 128 dernières requêtes
-def fetch_data_cached(symbol, convert, limit=2000):
-    return fetch_data_with_logging(symbol, convert, limit)
-
 # Fonction de calcul des indicateurs avec TA-Lib
 def calculate_indicators(prices):
     if len(prices) < 26:
