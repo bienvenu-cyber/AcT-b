@@ -477,11 +477,18 @@ async def main():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     
-    # Envoyer un message de test au démarrage
-    send_telegram_message("Le bot de trading a démarré avec succès.")
-    
+    # Envoi du message de test au démarrage
+    async def startup():
+        try:
+            # Envoi du message de démarrage
+            await send_telegram_message(CHAT_ID, "Le bot de trading a démarré avec succès.")
+        except Exception as e:
+            logging.error(f"Erreur lors de l'envoi du message de démarrage : {e}")
+
+    # Lancer la fonction de démarrage avant d'exécuter la tâche principale
+    asyncio.run(startup())  # Envoi du message de test
     try:
-        asyncio.run(main())
+        asyncio.run(main())  # Démarrage de la boucle principale de trading
     except KeyboardInterrupt:
         logging.info("Exécution interrompue par l'utilisateur.")
     except Exception as e:
