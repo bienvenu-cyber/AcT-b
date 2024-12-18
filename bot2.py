@@ -432,12 +432,13 @@ app = Flask(__name__)
 # Route Flask
 @app.route("/")
 def home():
+    logging.info("Requête reçue sur '/'")
     return jsonify({"status": "Bot de trading opérationnel."})
 
 # Lancer Flask dans un thread séparé
 async def run_flask():
     """Exécute Flask dans un thread séparé via asyncio."""
-    await asyncio.to_thread(app.run, host='0.0.0.0', port=PORT, threaded=True, use_reloader=False)
+    await asyncio.to_thread(app.run, host='0.0.0.0', port=PORT, threaded=True, use_reloader=False, debug=True)
 
 # Démarrer les tâches asyncio et Flask en parallèle
 async def main():
