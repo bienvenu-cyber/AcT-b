@@ -248,7 +248,7 @@ def analyze_signals(prices):
 
 # Appel de la fonction d'analyse
 for crypto in CRYPTO_LIST:
-    prices, opens, highs, lows, closes, volumes = fetch_historical_data(crypto)
+prices, opens, highs, lows, closes, volumes = await fetch_historical_data(crypto)
     
     if prices:
         signal = analyze_signals(prices)
