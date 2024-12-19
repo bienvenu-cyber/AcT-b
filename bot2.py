@@ -53,7 +53,7 @@ app.logger.setLevel(logging.INFO)
 
 # Constantes
 CURRENCY = "USD"
-CRYPTO_LIST = ["BTC", "ETH", "EUR"]
+CRYPTO_LIST = ["BTC", "ETH", "XRP"]  # Remplacement de EUR par XRP
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -102,6 +102,7 @@ async def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", 
                 volumes = np.array([item["volume"] for item in prices])
 
                 logger.debug(f"Données récupérées pour {crypto_symbol}: {len(prices)} éléments.")
+                logger.debug(f"Fin de la récupération des données historiques pour {crypto_symbol}.")
                 return prices, opens, highs, lows, closes, volumes
 
             else:
@@ -145,6 +146,7 @@ def calculate_indicators(prices):
     slowk, slowd = talib.STOCH(highs, lows, closes, fastk_period=14, slowk_period=3, slowd_period=3)
 
     logger.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}")
+    logger.debug("Fin du calcul des indicateurs.")
 
     return {
         "SMA_short": sma_short,
@@ -165,6 +167,7 @@ def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
     sl_price = entry_price - (sl_percent * entry_price)
     tp_price = entry_price + (tp_percent * entry_price)
     logger.debug(f"Stop Loss calculé à : {sl_price}, Take Profit calculé à : {tp_price} (Prix d'entrée : {entry_price})")
+    logger.debug("Fin du calcul des niveaux Stop Loss et Take Profit.")
     return sl_price, tp_price
 
 def analyze_signals(prices):
@@ -183,6 +186,7 @@ def analyze_signals(prices):
         decision = "Ne rien faire"
 
     logger.debug(f"Décision d'action : {decision}")
+    logger.debug("Fin de l'analyse des signaux.")
     return decision
 
 async def send_telegram_message(chat_id, message):
@@ -203,56 +207,46 @@ async def send_telegram_message(chat_id, message):
         logger.error(f"Erreur lors de l'envoi du message à Telegram : {e}")
     except asyncio.TimeoutError:
         logger.error("La requête a expiré.")
-
-async def periodic_price_check():
-    logger.info("Début de la vérification périodique des prix.")
-    while True:
-        for symbol in CRYPTO_LIST:
-            logger.debug(f"Vérification des prix pour {symbol}.")
-            prices = await fetch_historical_data(symbol, CURRENCY)
-            if prices:
-                signal = analyze_signals(prices)
-                logger.info(f"Signal généré pour {symbol}/{CURRENCY}: {signal}")
-                if signal:
-                    message = f"Signal de trading pour {symbol}/{CURRENCY}: {signal}"
-                    await send_telegram_message(CHAT_ID, message)
-            else:
-                logger.error(f"Impossible d'analyser les données pour {symbol}, données non disponibles.")
-        await asyncio.sleep(900)
-    logger.info("Fin de la vérification périodique des prix.")
+    logger.debug("Fin de l'envoi d'un message Telegram.")
 
 def log_memory_usage():
     logger.debug("Début de la journalisation de l'utilisation de la mémoire.")
     current, peak = tracemalloc.get_traced_memory()
     logger.info(f"Utilisation de la mémoire - Actuelle: {current / 10**6} MB, Pic: {peak / 10**6} MB")
     tracemalloc.clear_traces()
+    logger.debug("Fin de la journalisation de l'utilisation de la mémoire.")
 
-async def trading_task():
+async def trading_bot():
     logger.info("Début de la tâche de trading.")
     last_sent_signals = {}
     while True:
         logger.info("Début d'une nouvelle itération de trading.")
-        tasks = []
         for crypto in CRYPTO_LIST:
             logger.debug(f"Récupération des données historiques pour {crypto}.")
             prices = await fetch_historical_data(crypto, CURRENCY)
             if prices:
                 signal = analyze_signals(prices)
                 if signal:
+                    # Éviter d'envoyer des signaux déjà envoyés
                     if last_sent_signals.get(crypto) == signal:
                         logger.info(f"Signal déjà envoyé pour {crypto}. Ignoré.")
                         continue
                     last_sent_signals[crypto] = signal
                     entry_price = prices[-1]["close"]
                     sl_price, tp_price = calculate_sl_tp(entry_price)
-                    message = f"Signal de trading pour {crypto}/{CURRENCY}: {signal}\n"
-                    message += f"Prix d'entrée: {entry_price}\n"
-                    message += f"Stop Loss: {sl_price}\n"
-                    message += f"Take Profit: {tp_price}\n"
+                    message = (f"Signal de trading pour {crypto}/{CURRENCY}: {signal}\n"
+                               f"Prix d'entrée: {entry_price}\n"
+                               f"Stop Loss: {sl_price}\n"
+                               f"Take Profit: {tp_price}\n")
                     await send_telegram_message(CHAT_ID, message)
                 logger.info(f"Signal généré pour {crypto}/{CURRENCY}: {signal}")
             else:
                 logger.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
+        
+        # Vérification de la mémoire
+        log_memory_usage()
+        
+        # Attendre avant la prochaine itération
         await asyncio.sleep(600)
     logger.info("Fin de la tâche de trading.")
 
@@ -269,6 +263,7 @@ def configure_signal_handlers(loop):
     logger.debug("Configuration des gestionnaires de signaux.")
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda sig=sig: asyncio.create_task(handle_shutdown_signal(sig, None)))
+    logger.debug("Fin de la configuration des gestionnaires de signaux.")
 
 @app.route("/")
 def home():
@@ -278,11 +273,12 @@ def home():
 async def run_flask():
     logger.debug("Démarrage de l'application Flask.")
     await asyncio.to_thread(app.run, host='0.0.0.0', port=PORT, threaded=True, use_reloader=False, debug=True)
+    logger.debug("Fin du démarrage de l'application Flask.")
 
 async def main():
     logger.info("Début de l'exécution principale.")
     await asyncio.gather(
-        trading_task(),
+        trading_bot(),
         run_flask()
     )
     logger.info("Fin de l'exécution principale.")
