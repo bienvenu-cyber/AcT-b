@@ -10,7 +10,6 @@ import asyncio
 import signal
 import sys
 import tracemalloc
-import objgraph
 import talib
 from logging.handlers import RotatingFileHandler
 import aiohttp
@@ -21,7 +20,7 @@ tracemalloc.start()
 # Configuration du gestionnaire de logs avec rotation des fichiers
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 handler = RotatingFileHandler('bot_trading.log', maxBytes=5*1024*1024, backupCount=3)
-handler.setFormatter(logging.Formatter('%(asctime)s - %(levellevel)s - %(message)s'))
+handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
 logging.getLogger().addHandler(handler)
 logger = logging.getLogger(__name__)
 logger.debug("Démarrage de l'application.")
@@ -32,11 +31,11 @@ CHAT_ID = os.getenv("CHAT_ID")
 PORT = int(os.getenv("PORT", 8002))
 
 if not TELEGRAM_TOKEN:
-    logging.error("La variable d'environnement TELEGRAM_TOKEN est manquante. Veuillez la définir.")
+    logger.error("La variable d'environnement TELEGRAM_TOKEN est manquante. Veuillez la définir.")
     sys.exit(1)
 
 if not CHAT_ID:
-    logging.error("La variable d'environnement CHAT_ID est manquante. Veuillez la définir.")
+    logger.error("La variable d'environnement CHAT_ID est manquante. Veuillez la définir.")
     sys.exit(1)
 
 bot = Bot(token=TELEGRAM_TOKEN)
@@ -44,9 +43,17 @@ bot = Bot(token=TELEGRAM_TOKEN)
 # Initialisation de Flask
 app = Flask(__name__)
 
+# Configuration du gestionnaire de logs pour Flask avec rotation des fichiers
+flask_handler = RotatingFileHandler('app.log', maxBytes=10*1024*1024, backupCount=3)
+flask_handler.setLevel(logging.INFO)
+flask_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+flask_handler.setFormatter(flask_formatter)
+app.logger.addHandler(flask_handler)
+app.logger.setLevel(logging.INFO)
+
 # Constantes
 CURRENCY = "USD"
-CRYPTO_LIST = ["BTC", "ETH", "XRP"]
+CRYPTO_LIST = ["BTC", "ETH", "EUR"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -93,26 +100,26 @@ async def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", 
                 closes = np.array([item["close"] for item in prices])
                 volumes = np.array([item["volume"] for item in prices])
 
-                logging.debug(f"Données récupérées pour {crypto_symbol}: {len(prices)} éléments.")
+                logger.debug(f"Données récupérées pour {crypto_symbol}: {len(prices)} éléments.")
                 return prices, opens, highs, lows, closes, volumes
 
             else:
-                logging.error(f"Erreur API : {data.get('Message', 'Données invalides.')}")
+                logger.error(f"Erreur API : {data.get('Message', 'Données invalides.')}")
                 return [], [], [], [], [], []
 
         except aiohttp.ClientError as e:
             attempt += 1
             if attempt >= max_retries:
-                logging.error(f"Échec après {max_retries} tentatives : {e}")
+                logger.error(f"Échec après {max_retries} tentatives : {e}")
                 return [], [], [], [], [], []
-            logging.warning(f"Tentative {attempt}/{max_retries} échouée, nouvelle tentative dans {backoff_factor ** attempt} secondes.")
+            logger.warning(f"Tentative {attempt}/{max_retries} échouée, nouvelle tentative dans {backoff_factor ** attempt} secondes.")
             await asyncio.sleep(backoff_factor ** attempt)
 
         except Exception as e:
-            logging.error(f"Erreur inattendue : {e}")
+            logger.error(f"Erreur inattendue : {e}")
             return [], [], [], [], [], []
 
-    logging.error(f"Échec définitif pour {crypto_symbol}.")
+    logger.error(f"Échec définitif pour {crypto_symbol}.")
     return [], [], [], [], [], []
 
 # Fonction de calcul des indicateurs avec TA-Lib
@@ -135,7 +142,7 @@ def calculate_indicators(prices):
     rsi = talib.RSI(closes, timeperiod=14)[-1]
     slowk, slowd = talib.STOCH(highs, lows, closes, fastk_period=14, slowk_period=3, slowd_period=3)
 
-    logging.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}")
+    logger.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}")
 
     return {
         "SMA_short": sma_short,
@@ -154,7 +161,7 @@ def calculate_indicators(prices):
 def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
     sl_price = entry_price - (sl_percent * entry_price)
     tp_price = entry_price + (tp_percent * entry_price)
-    logging.debug(f"Stop Loss calculé à : {sl_price}, Take Profit calculé à : {tp_price} (Prix d'entrée : {entry_price})")
+    logger.debug(f"Stop Loss calculé à : {sl_price}, Take Profit calculé à : {tp_price} (Prix d'entrée : {entry_price})")
     return sl_price, tp_price
 
 def analyze_signals(prices):
@@ -171,7 +178,7 @@ def analyze_signals(prices):
     else:
         decision = "Ne rien faire"
 
-    logging.debug(f"Décision d'action : {decision}")
+    logger.debug(f"Décision d'action : {decision}")
     return decision
 
 async def send_telegram_message(chat_id, message):
@@ -180,9 +187,9 @@ async def send_telegram_message(chat_id, message):
         async with aiohttp.ClientSession() as session:
             async with session.get(url, params={"chat_id": chat_id, "text": message}) as response:
                 response.raise_for_status()
-                logging.debug(f"Message envoyé avec succès. Réponse: {await response.json()}")
+                logger.debug(f"Message envoyé avec succès. Réponse: {await response.json()}")
     except aiohttp.ClientError as e:
-        logging.error(f"Erreur lors de l'envoi du message à Telegram : {e}")
+        logger.error(f"Erreur lors de l'envoi du message à Telegram : {e}")
 
 async def periodic_price_check():
     while True:
@@ -190,23 +197,23 @@ async def periodic_price_check():
             prices = await fetch_historical_data(symbol, CURRENCY)
             if prices:
                 signal = analyze_signals(prices)
-                logging.info(f"Signal généré pour {symbol}/{CURRENCY}: {signal}")
+                logger.info(f"Signal généré pour {symbol}/{CURRENCY}: {signal}")
                 if signal:
                     message = f"Signal de trading pour {symbol}/{CURRENCY}: {signal}"
                     await send_telegram_message(CHAT_ID, message)
             else:
-                logging.error(f"Impossible d'analyser les données pour {symbol}, données non disponibles.")
+                logger.error(f"Impossible d'analyser les données pour {symbol}, données non disponibles.")
         await asyncio.sleep(900)
 
 def log_memory_usage():
     current, peak = tracemalloc.get_traced_memory()
-    logging.info(f"Utilisation de la mémoire - Actuelle: {current / 10**6} MB, Pic: {peak / 10**6} MB")
+    logger.info(f"Utilisation de la mémoire - Actuelle: {current / 10**6} MB, Pic: {peak / 10**6} MB")
     tracemalloc.clear_traces()
 
 async def trading_task():
     last_sent_signals = {}
     while True:
-        logging.info("Début d'une nouvelle itération de trading.")
+        logger.info("Début d'une nouvelle itération de trading.")
         tasks = []
         for crypto in CRYPTO_LIST:
             prices = await fetch_historical_data(crypto, CURRENCY)
@@ -214,7 +221,7 @@ async def trading_task():
                 signal = analyze_signals(prices)
                 if signal:
                     if last_sent_signals.get(crypto) == signal:
-                        logging.info(f"Signal déjà envoyé pour {crypto}. Ignoré.")
+                        logger.info(f"Signal déjà envoyé pour {crypto}. Ignoré.")
                         continue
                     last_sent_signals[crypto] = signal
                     entry_price = prices[-1]["close"]
@@ -224,18 +231,18 @@ async def trading_task():
                     message += f"Stop Loss: {sl_price}\n"
                     message += f"Take Profit: {tp_price}\n"
                     await send_telegram_message(CHAT_ID, message)
-                logging.info(f"Signal généré pour {crypto}/{CURRENCY}: {signal}")
+                logger.info(f"Signal généré pour {crypto}/{CURRENCY}: {signal}")
             else:
-                logging.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
+                logger.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
         await asyncio.sleep(600)
 
 async def handle_shutdown_signal(signum, frame):
-    logging.info(f"Signal d'arrêt reçu : {signum}")
+    logger.info(f"Signal d'arrêt reçu : {signum}")
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     for task in tasks:
         task.cancel()
     await asyncio.gather(*tasks, return_exceptions=True)
-    logging.info("Arrêt propre du bot.")
+    logger.info("Arrêt propre du bot.")
     sys.exit(0)
 
 def configure_signal_handlers(loop):
@@ -244,7 +251,7 @@ def configure_signal_handlers(loop):
 
 @app.route("/")
 def home():
-    logging.info("Requête reçue sur '/'")
+    logger.info("Requête reçue sur '/'")
     return jsonify({"status": "Bot de trading opérationnel."})
 
 async def run_flask():
@@ -261,8 +268,8 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logging.info("Exécution interrompue par l'utilisateur.")
+        logger.info("Exécution interrompue par l'utilisateur.")
     except Exception as e:
-        logging.error(f"Erreur inattendue : {e}")
+        logger.error(f"Erreur inattendue : {e}")
     finally:
-        logging.info("Arrêt complet.")
+        logger.info("Arrêt complet.")
