@@ -53,7 +53,7 @@ app.logger.setLevel(logging.INFO)
 
 # Constantes
 CURRENCY = "USD"
-CRYPTO_LIST = ["BTC", "ETH", "ADA"]
+CRYPTO_LIST = ["BTC", "ETH", "EUR"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -190,11 +190,19 @@ async def send_telegram_message(chat_id, message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, params={"chat_id": chat_id, "text": message}) as response:
+            async with session.get(url, params={"chat_id": chat_id, "text": message}, timeout=10) as response:
                 response.raise_for_status()
-                logger.debug(f"Message envoyé avec succès. Réponse: {await response.json()}")
+                response_json = await response.json()
+                logger.debug(f"Message envoyé avec succès. Réponse: {response_json}")
+                # Vérifiez si la réponse contient des informations d'erreur
+                if not response_json.get("ok"):
+                    logger.error(f"Erreur de Telegram : {response_json}")
+                else:
+                    logger.info(f"Message envoyé avec succès : {response_json['result']['text']}")
     except aiohttp.ClientError as e:
         logger.error(f"Erreur lors de l'envoi du message à Telegram : {e}")
+    except asyncio.TimeoutError:
+        logger.error("La requête a expiré.")
 
 async def periodic_price_check():
     logger.info("Début de la vérification périodique des prix.")
