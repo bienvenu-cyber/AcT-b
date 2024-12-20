@@ -162,10 +162,18 @@ def calculate_indicators(prices):
         "Stochastic_D": slowd[-1],
     }
 
-def calculate_sl_tp(entry_price, sl_percent=0.02, tp_percent=0.05):
+def calculate_sl_tp(entry_price, signal_type, atr, multiplier=1.5):
     logger.debug("Début du calcul des niveaux Stop Loss et Take Profit.")
-    sl_price = entry_price - (sl_percent * entry_price)
-    tp_price = entry_price + (tp_percent * entry_price)
+    if signal_type == "Acheter":
+        sl_price = entry_price - (multiplier * atr)
+        tp_price = entry_price + (multiplier * atr)
+    elif signal_type == "Vendre":
+        sl_price = entry_price + (multiplier * atr)
+        tp_price = entry_price - (multiplier * atr)
+    else:
+        logger.error("Type de signal inconnu.")
+        return None, None
+
     logger.debug(f"Stop Loss calculé à : {sl_price}, Take Profit calculé à : {tp_price} (Prix d'entrée : {entry_price})")
     logger.debug("Fin du calcul des niveaux Stop Loss et Take Profit.")
     return sl_price, tp_price
@@ -225,27 +233,34 @@ async def trading_bot():
             logger.debug(f"Récupération des données historiques pour {crypto}.")
             prices, opens, highs, lows, closes, volumes = await fetch_historical_data(crypto, CURRENCY)
             if prices:
+                logger.debug(f"Données récupérées pour {crypto}: {prices[-1]}")
                 signal = analyze_signals(prices)
                 if signal:
-                    # Éviter d'envoyer des signaux déjà envoyés
+                    logger.debug(f"Signal analysé pour {crypto}: {signal}")
                     if last_sent_signals.get(crypto) == signal:
                         logger.info(f"Signal déjà envoyé pour {crypto}. Ignoré.")
                         continue
                     last_sent_signals[crypto] = signal
                     entry_price = prices[-1]["close"]
-                    sl_price, tp_price = calculate_sl_tp(entry_price)
+                    atr = talib.ATR(highs, lows, closes, timeperiod=14)[-1]  # Assurez-vous que l'ATR est calculé correctement
+                    sl_price, tp_price = calculate_sl_tp(entry_price, signal, atr)
+                    if sl_price is None or tp_price is None:
+                        logger.error(f"Erreur dans le calcul des niveaux SL/TP pour {crypto}")
+                        continue
                     message = (f"Signal de trading pour {crypto}/{CURRENCY}: {signal}\n"
                                f"Prix d'entrée: {entry_price}\n"
                                f"Stop Loss: {sl_price}\n"
                                f"Take Profit: {tp_price}\n")
+                    logger.debug(f"Envoi du message Telegram pour {crypto}: {message}")
                     await send_telegram_message(CHAT_ID, message)
+                    logger.info(f"Message Telegram envoyé pour {crypto}: {signal}")
                 logger.info(f"Signal généré pour {crypto}/{CURRENCY}: {signal}")
             else:
                 logger.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
-        
+
         # Vérification de la mémoire
         log_memory_usage()
-        
+
         # Attendre avant la prochaine itération
         logger.debug("Attente de 10 minutes avant la prochaine itération.")
         await asyncio.sleep(600)
