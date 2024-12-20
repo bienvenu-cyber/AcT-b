@@ -39,7 +39,7 @@ ENV PORT=8002
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Exposer le port sur lequel l'application écoute
-EXPOSE 8001
+EXPOSE 8002
 
 # Commande de démarrage pour python
 CMD ["python", "bot2.py"]
