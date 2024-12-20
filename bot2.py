@@ -53,7 +53,7 @@ app.logger.setLevel(logging.INFO)
 
 # Constantes
 CURRENCY = "USD"
-CRYPTO_LIST = ["BTC", "ETH", "XRP"]  # Remplacement de EUR par XRP
+CRYPTO_LIST = ["BTC", "ETH", "ADA"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -223,7 +223,7 @@ async def trading_bot():
         logger.info("Début d'une nouvelle itération de trading.")
         for crypto in CRYPTO_LIST:
             logger.debug(f"Récupération des données historiques pour {crypto}.")
-            prices = await fetch_historical_data(crypto, CURRENCY)
+            prices, opens, highs, lows, closes, volumes = await fetch_historical_data(crypto, CURRENCY)
             if prices:
                 signal = analyze_signals(prices)
                 if signal:
@@ -247,7 +247,9 @@ async def trading_bot():
         log_memory_usage()
         
         # Attendre avant la prochaine itération
+        logger.debug("Attente de 10 minutes avant la prochaine itération.")
         await asyncio.sleep(600)
+        logger.debug("Fin de l'attente de 10 minutes.")
     logger.info("Fin de la tâche de trading.")
 
 async def handle_shutdown_signal(signum, frame):
