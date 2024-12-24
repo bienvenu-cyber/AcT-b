@@ -26,19 +26,12 @@ logger = logging.getLogger(__name__)
 logger.debug("Démarrage de l'application.")
 
 # Variables d'environnement
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 PORT = int(os.getenv("PORT", 8002))
 
-if not TELEGRAM_TOKEN:
-    logger.error("La variable d'environnement TELEGRAM_TOKEN est manquante. Veuillez la définir.")
+if not DISCORD_WEBHOOK_URL:
+    logger.error("La variable d'environnement DISCORD_WEBHOOK_URL est manquante. Veuillez la définir.")
     sys.exit(1)
-
-if not CHAT_ID:
-    logger.error("La variable d'environnement CHAT_ID est manquante. Veuillez la définir.")
-    sys.exit(1)
-
-bot = Bot(token=TELEGRAM_TOKEN)
 
 # Initialisation de Flask
 app = Flask(__name__)
@@ -53,7 +46,7 @@ app.logger.setLevel(logging.INFO)
 
 # Constantes
 CURRENCY = "USD"
-CRYPTO_LIST = ["BTC", "ETH", "ADA"]
+CRYPTO_LIST = ["BTC", "ETH"]
 MAX_POSITION_PERCENTAGE = 0.1
 CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
@@ -197,25 +190,22 @@ def analyze_signals(prices):
     logger.debug("Fin de l'analyse des signaux.")
     return decision
 
-async def send_telegram_message(chat_id, message):
-    logger.debug(f"Début de l'envoi d'un message Telegram à {chat_id}.")
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+async def send_discord_message(webhook_url, message):
+    logger.debug(f"Début de l'envoi d'un message Discord via webhook.")
+    data = {
+        "content": message
+    }
     try:
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, params={"chat_id": chat_id, "text": message}, timeout=10) as response:
+            async with session.post(webhook_url, json=data, timeout=10) as response:
                 response.raise_for_status()
                 response_json = await response.json()
                 logger.debug(f"Message envoyé avec succès. Réponse: {response_json}")
-                # Vérifiez si la réponse contient des informations d'erreur
-                if not response_json.get("ok"):
-                    logger.error(f"Erreur de Telegram : {response_json}")
-                else:
-                    logger.info(f"Message envoyé avec succès : {response_json['result']['text']}")
     except aiohttp.ClientError as e:
-        logger.error(f"Erreur lors de l'envoi du message à Telegram : {e}")
+        logger.error(f"Erreur lors de l'envoi du message à Discord : {e}")
     except asyncio.TimeoutError:
         logger.error("La requête a expiré.")
-    logger.debug("Fin de l'envoi d'un message Telegram.")
+    logger.debug("Fin de l'envoi d'un message Discord.")
 
 def log_memory_usage():
     logger.debug("Début de la journalisation de l'utilisation de la mémoire.")
@@ -251,9 +241,9 @@ async def trading_bot():
                                f"Prix d'entrée: {entry_price}\n"
                                f"Stop Loss: {sl_price}\n"
                                f"Take Profit: {tp_price}\n")
-                    logger.debug(f"Envoi du message Telegram pour {crypto}: {message}")
-                    await send_telegram_message(CHAT_ID, message)
-                    logger.info(f"Message Telegram envoyé pour {crypto}: {signal}")
+                    logger.debug(f"Envoi du message Discord pour {crypto}: {message}")                    
+                    await send_discord_message(DISCORD_WEBHOOK_URL, message)
+                    logger.info(f"Message Discord envoyé pour {crypto}: {signal}")
                 logger.info(f"Signal généré pour {crypto}/{CURRENCY}: {signal}")
             else:
                 logger.error(f"Impossible d'analyser les données pour {crypto}, données non disponibles.")
@@ -262,9 +252,9 @@ async def trading_bot():
         log_memory_usage()
 
         # Attendre avant la prochaine itération
-        logger.debug("Attente de 10 minutes avant la prochaine itération.")
-        await asyncio.sleep(600)
-        logger.debug("Fin de l'attente de 10 minutes.")
+        logger.debug("Attente de 15 minutes avant la prochaine itération.")
+        await asyncio.sleep(900)
+        logger.debug("Fin de l'attente de 15 minutes.")
     logger.info("Fin de la tâche de trading.")
 
 async def handle_shutdown_signal(signum, frame):
