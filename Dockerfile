@@ -30,9 +30,8 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 COPY bot2.py /app/bot2.py
 
-# Ajouter les variables d'environnement (TOKEN et CHAT_ID)
-ENV TELEGRAM_TOKEN=7314378359:AAGiaLQ9_bSduRNaLE2dwn2mqimKiwyQBb0
-ENV CHAT_ID=7551508160
+# Ajouter les variables d'environnement
+ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W8f2Ews3xHkXY
 ENV PORT=8002
 
 # Installer les dépendances Python
