@@ -199,14 +199,15 @@ async def send_discord_message(webhook_url, message):
         async with aiohttp.ClientSession() as session:
             async with session.post(webhook_url, json=data, timeout=10) as response:
                 response.raise_for_status()
-                response_json = await response.json()
-                logger.debug(f"Message envoyé avec succès. Réponse: {response_json}")
+                response_text = await response.text()
+                logger.debug(f"Message envoyé avec succès. Réponse: {response_text}")
     except aiohttp.ClientError as e:
         logger.error(f"Erreur lors de l'envoi du message à Discord : {e}")
+        response_text = await response.text()
+        logger.error(f"Contenu de la réponse : {response_text}")
     except asyncio.TimeoutError:
         logger.error("La requête a expiré.")
     logger.debug("Fin de l'envoi d'un message Discord.")
-
 def log_memory_usage():
     logger.debug("Début de la journalisation de l'utilisation de la mémoire.")
     current, peak = tracemalloc.get_traced_memory()
