@@ -21,3 +21,4 @@ flake8
 black
 tensorflow
 aiohttp==3.8.6
+APSscheduler==3.7.0
