@@ -13,6 +13,8 @@ import tracemalloc
 import talib
 from logging.handlers import RotatingFileHandler
 import aiohttp
+import datetime
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # Activer la surveillance de la mémoire
 tracemalloc.start()
@@ -52,12 +54,7 @@ CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
-# Récupération des données historiques pour les cryptomonnaies
-async def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=2000, max_retries=5, backoff_factor=2):
-    logger.debug(f"Début de la récupération des données historiques pour {crypto_symbol}.")
-    base_url = "https://min-api.cryptocompare.com/data/v2/"
-
-    # Déterminer le bon endpoint en fonction de l'intervalle
+ # Déterminer le bon endpoint en fonction de l'intervalle
     endpoint = "histohour" if interval == "hour" else "histoday"
     url = f"{base_url}{endpoint}"
     params = {
@@ -120,7 +117,7 @@ async def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", 
 # Fonction de calcul des indicateurs avec TA-Lib
 def calculate_indicators(prices):
     logger.debug("Début du calcul des indicateurs.")
-    if len(prices) < 26:
+    if len(prices) < 50:
         raise ValueError("Pas assez de données pour calculer les indicateurs.")
 
     opens = np.array([price["open"] for price in prices])
@@ -129,7 +126,7 @@ def calculate_indicators(prices):
     closes = np.array([price["close"] for price in prices])
 
     sma_short = talib.SMA(closes, timeperiod=10)[-1]
-    sma_long = talib.SMA(closes, timeperiod=20)[-1]
+    sma_long = talib.SMA(closes, timeperiod=50)[-1]
     ema_short = talib.EMA(closes, timeperiod=12)[-1]
     ema_long = talib.EMA(closes, timeperiod=26)[-1]
     macd, macd_signal, macd_hist = talib.MACD(closes, fastperiod=12, slowperiod=26, signalperiod=9)
@@ -137,8 +134,10 @@ def calculate_indicators(prices):
     upper_band, middle_band, lower_band = talib.BBANDS(closes, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
     rsi = talib.RSI(closes, timeperiod=14)[-1]
     slowk, slowd = talib.STOCH(highs, lows, closes, fastk_period=14, slowk_period=3, slowd_period=3)
+    adx = talib.ADX(highs, lows, closes, timeperiod=14)[-1]
+    cci = talib.CCI(highs, lows, closes, timeperiod=14)[-1]
 
-    logger.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}")
+    logger.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}, ADX={adx}, CCI={cci}")
     logger.debug("Fin du calcul des indicateurs.")
 
     return {
@@ -153,6 +152,8 @@ def calculate_indicators(prices):
         "RSI": rsi,
         "Stochastic_K": slowk[-1],
         "Stochastic_D": slowd[-1],
+        "ADX": adx,
+        "CCI": cci
     }
 
 def calculate_sl_tp(entry_price, signal_type, atr, multiplier=1.5):
@@ -175,13 +176,13 @@ def analyze_signals(prices):
     logger.debug("Début de l'analyse des signaux.")
     indicators = calculate_indicators(prices)
 
-    if indicators['RSI'] < 30 and indicators['Stochastic_K'] < 20:
+    if indicators['RSI'] < 30 and indicators['Stochastic_K'] < 20 and indicators['ADX'] > 20 and indicators['EMA_short'] > indicators['EMA_long']:
         decision = "Acheter"
-    elif indicators['RSI'] > 70 and indicators['Stochastic_K'] > 80:
+    elif indicators['RSI'] > 70 and indicators['Stochastic_K'] > 80 and indicators['ADX'] > 20 and indicators['EMA_short'] < indicators['EMA_long']:
         decision = "Vendre"
-    elif indicators['MACD'] > 0 and indicators['EMA_short'] > indicators['EMA_long']:
+    elif indicators['MACD'] > 0 and indicators['EMA_short'] > indicators['EMA_long'] and indicators['ADX'] > 20:
         decision = "Acheter"
-    elif indicators['MACD'] < 0 and indicators['EMA_short'] < indicators['EMA_long']:
+    elif indicators['MACD'] < 0 and indicators['EMA_short'] < indicators['EMA_long'] and indicators['ADX'] > 20:
         decision = "Vendre"
     else:
         decision = "Ne rien faire"
@@ -208,6 +209,7 @@ async def send_discord_message(webhook_url, message):
     except asyncio.TimeoutError:
         logger.error("La requête a expiré.")
     logger.debug("Fin de l'envoi d'un message Discord.")
+
 def log_memory_usage():
     logger.debug("Début de la journalisation de l'utilisation de la mémoire.")
     current, peak = tracemalloc.get_traced_memory()
@@ -233,7 +235,7 @@ async def trading_bot():
                         continue
                     last_sent_signals[crypto] = signal
                     entry_price = prices[-1]["close"]
-                    atr = talib.ATR(highs, lows, closes, timeperiod=14)[-1]  # Assurez-vous que l'ATR est calculé correctement
+                    atr = talib.ATR(highs, lows, closes, timeperiod=14)[-1]
                     sl_price, tp_price = calculate_sl_tp(entry_price, signal, atr)
                     if sl_price is None or tp_price is None:
                         logger.error(f"Erreur dans le calcul des niveaux SL/TP pour {crypto}")
@@ -242,7 +244,7 @@ async def trading_bot():
                                f"Prix d'entrée: {entry_price}\n"
                                f"Stop Loss: {sl_price}\n"
                                f"Take Profit: {tp_price}\n")
-                    logger.debug(f"Envoi du message Discord pour {crypto}: {message}")                    
+                    logger.debug(f"Envoi du message Discord pour {crypto}: {message}")
                     await send_discord_message(DISCORD_WEBHOOK_URL, message)
                     logger.info(f"Message Discord envoyé pour {crypto}: {signal}")
                 logger.info(f"Signal généré pour {crypto}/{CURRENCY}: {signal}")
@@ -257,6 +259,36 @@ async def trading_bot():
         await asyncio.sleep(900)
         logger.debug("Fin de l'attente de 15 minutes.")
     logger.info("Fin de la tâche de trading.")
+
+async def send_daily_summary(webhook_url):
+    logger.debug("Début de l'envoi du résumé journalier sur Discord.")
+    
+    try:
+        df = pd.read_csv(PERFORMANCE_LOG)
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        today = datetime.datetime.utcnow().date()
+        daily_trades = df[df['timestamp'].dt.date == today]
+        
+        if not daily_trades.empty:
+            summary = daily_trades.to_string(index=False)
+            message = f"Résumé des trades du {today}:\n\n{summary}"
+        else:
+            message = f"Aucun trade effectué le {today}."
+
+        data = {"content": message}
+        async with aiohttp.ClientSession() as session:
+            async with session.post(webhook_url, json=data, timeout=10) as response:
+                response.raise_for_status()
+                response_text = await response.text()
+                logger.debug(f"Résumé journalier envoyé avec succès. Réponse: {response_text}")
+    except Exception as e:
+        logger.error(f"Erreur lors de l'envoi du résumé journalier : {e}")
+
+    logger.debug("Fin de l'envoi du résumé journalier sur Discord.")
+
+scheduler = AsyncIOScheduler()
+scheduler.add_job(send_daily_summary, 'interval', days=1, args=[DISCORD_WEBHOOK_URL], next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=10))
+scheduler.start()
 
 async def handle_shutdown_signal(signum, frame):
     logger.info(f"Signal d'arrêt reçu : {signum}")
