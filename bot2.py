@@ -54,15 +54,20 @@ CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
-# Déterminer le bon endpoint en fonction de l'intervalle
-endpoint = "histohour" if interval == "hour" else "histoday"
-url = f"{base_url}{endpoint}"
-params = {
-    "fsym": crypto_symbol.upper(),
-    "tsym": currency.upper(),
-    "limit": limit,
-    "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
-}
+# Récupération des données historiques pour les cryptomonnaies
+async def fetch_historical_data(crypto_symbol, currency="USD", interval="hour", limit=2000, max_retries=5, backoff_factor=2):
+    logger.debug(f"Début de la récupération des données historiques pour {crypto_symbol}.")
+    base_url = "https://min-api.cryptocompare.com/data/v2/"
+
+    # Déterminer le bon endpoint en fonction de l'intervalle
+    endpoint = "histohour" if interval == "hour" else "histoday"
+    url = f"{base_url}{endpoint}"
+    params = {
+        "fsym": crypto_symbol.upper(),
+        "tsym": currency.upper(),
+        "limit": limit,
+        "api_key": "70001b698e6a3d349e68ba1b03e7489153644e38c5026b4a33d55c8e460c7a3c"
+    }
 
     attempt = 0
     while attempt < max_retries:
