@@ -54,8 +54,8 @@ CAPITAL = 100
 PERFORMANCE_LOG = "trading_performance.csv"
 SIGNAL_LOG = "signal_log.csv"
 
- # Déterminer le bon endpoint en fonction de l'intervalle
-endpoint = "histohour" if interval == "hour" else "histoday" if interval =="day"
+# Déterminer le bon endpoint en fonction de l'intervalle
+endpoint = "histohour" if interval == "hour" else "histoday"
 url = f"{base_url}{endpoint}"
 params = {
     "fsym": crypto_symbol.upper(),
