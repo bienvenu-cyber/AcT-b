@@ -27,7 +27,7 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
 # Verify that the TA-Lib library is correctly installed
-RUN ldconfig
+RUN ls -l /usr/local/lib | grep ta_lib
 
 # Set library path environment variable
 ENV LD_LIBRARY_PATH=/usr/local/lib
