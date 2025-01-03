@@ -1,4 +1,4 @@
-# Utilisation de Python 3.11 basé sur Debian complet
+# Utilisation de Python 3.11 basé sur Debian
 FROM python:3.11
 
 # Installer les dépendances système
@@ -55,10 +55,9 @@ ENV PORT=8002
 
 # Mettre à jour pip et installer les dépendances Python
 RUN python -m pip install --upgrade pip && \
-    pip install --no-cache-dir TA-Lib && \
     pip install --no-cache-dir -r requirements.txt
 
-# Vérifier l'installation de TA-Lib
+# Vérifier que TA-Lib fonctionne
 RUN python -c "import talib; print(talib.get_functions())"
 
 # Exposer le port
