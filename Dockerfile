@@ -1,6 +1,9 @@
 # Utilisation de Python 3.11 basé sur Debian
 FROM python:3.11-slim
 
+# Mettre à jour pip dès le début
+RUN python -m pip install --upgrade pip
+
 # Mettre à jour apt-get et installer les dépendances système nécessaires
 RUN apt-get update && apt-get install -y \
     build-essential \
@@ -48,13 +51,12 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 COPY bot2.py /app/bot2.py
 
+# Installer toutes les dépendances Python à partir de requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Ajouter les variables d'environnement
 ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W8f2Ews3xHkXY
 ENV PORT=8002
-
-# Mettre à jour pip et installer les dépendances Python
-RUN python -m pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
 
 # Exposer le port
 EXPOSE 8002
