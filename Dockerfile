@@ -13,11 +13,10 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     python3-dev \
     curl \
-    git \
-    libta-lib-dev && \
+    git && \
     rm -rf /var/lib/apt/lists/*
 
-# Télécharger et installer TA-Lib depuis les sources
+# Télécharger et compiler TA-Lib
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
@@ -27,10 +26,10 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     cd .. && \
     rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
-# Vérifier si TA-Lib est bien installé
+# Vérifier l'installation de TA-Lib
 RUN ls -l /usr/local/lib | grep ta_lib || echo "TA-Lib not found"
 
-# Configurer les bibliothèques partagées
+# Ajouter TA-Lib aux bibliothèques système
 ENV LD_LIBRARY_PATH=/usr/local/lib
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ta-lib.conf && ldconfig
 
