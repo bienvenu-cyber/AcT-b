@@ -1,7 +1,7 @@
-# Utiliser une image de base Python
+# Use a base Python image
 FROM python:3.11-slim
 
-# Mettre à jour pip et installer les dépendances système
+# Update pip and install system dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     wget \
@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     git && \
     rm -rf /var/lib/apt/lists/*
 
-# Télécharger et installer TA-Lib à partir de la source
+# Download and install TA-Lib from source
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
@@ -26,23 +26,23 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     cd .. && \
     rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
-# Définir le répertoire de travail
+# Define the working directory
 WORKDIR /app
 
-# Copier les fichiers nécessaires dans l'image Docker
+# Copy the necessary files into the Docker image
 COPY requirements.txt /app/requirements.txt
 COPY bot2.py /app/bot2.py
 
-# Ajouter des variables d'environnement
+# Add environment variables
 ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W8f2Ews3xHkXY
 ENV PORT=8002
 
-# Installer les dépendances Python
+# Install Python dependencies
 RUN python -m pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Exposer le port sur lequel l'application écoute
+# Expose the port on which the application listens
 EXPOSE 8002
 
-# Commande pour démarrer l'application
+# Command to start the application
 CMD ["python", "bot2.py"]
