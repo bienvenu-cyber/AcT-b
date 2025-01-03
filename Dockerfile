@@ -1,22 +1,19 @@
-# Use a base Python image
+# Utiliser une image de base Python légère
 FROM python:3.11-slim
 
-# Update pip and install system dependencies
-RUN apt-get update && apt-get install -y \
+# Installer les dépendances système nécessaires pour psycopg2 et TA-Lib
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     wget \
+    gcc \
     libpq-dev \
     libtool \
     autoconf \
-    automake \
-    pkg-config \
-    libffi-dev \
-    python3-dev \
-    curl \
-    git && \
-    rm -rf /var/lib/apt/lists/*
+    make \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Download and install TA-Lib from source
+# Télécharger et installer TA-Lib à partir des sources
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
@@ -26,23 +23,23 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     cd .. && \
     rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
-# Define the working directory
+# Définir le répertoire de travail
 WORKDIR /app
 
-# Copy the necessary files into the Docker image
+# Copier les fichiers nécessaires dans l'image Docker
 COPY requirements.txt /app/requirements.txt
 COPY bot2.py /app/bot2.py
 
-# Add environment variables
+# Mettre à jour pip et installer les dépendances Python
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Définir les variables d'environnement
 ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W8f2Ews3xHkXY
 ENV PORT=8002
 
-# Install Python dependencies
-RUN python -m pip install --upgrade pip
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Expose the port on which the application listens
+# Exposer le port sur lequel l'application écoute
 EXPOSE 8002
 
-# Command to start the application
+# Commande de démarrage pour python
 CMD ["python", "bot2.py"]
