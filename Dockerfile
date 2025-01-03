@@ -1,7 +1,7 @@
-# Utilisation de Python 3.11 basé sur Debian slim
-FROM python:3.11-slim
+# Utilisation de Python 3.11 basé sur Debian complet (pas slim !)
+FROM python:3.11
 
-# Mettre à jour apt-get et installer les dépendances système
+# Installer les dépendances système
 RUN apt-get update && apt-get install -y \
     build-essential \
     wget \
@@ -13,7 +13,13 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     python3-dev \
     curl \
-    git && \
+    git \
+    gcc \
+    make \
+    cmake \
+    libc6-dev \
+    libssl-dev \
+    libsqlite3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Télécharger et compiler TA-Lib
@@ -26,8 +32,8 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     cd .. && \
     rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
-# Vérifier l'installation de TA-Lib
-RUN ls -l /usr/local/lib | grep ta_lib || echo "TA-Lib not found"
+# Vérifier si TA-Lib est bien installé
+RUN ls -l /usr/local/lib | grep libta_lib || echo "TA-Lib not found"
 
 # Ajouter TA-Lib aux bibliothèques système
 ENV LD_LIBRARY_PATH=/usr/local/lib
