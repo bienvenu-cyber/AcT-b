@@ -20,17 +20,14 @@ RUN apt-get update && apt-get install -y \
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
-    ./configure --prefix=/usr/local && \
+    ./configure --prefix=/usr && \
     make && \
     make install && \
     cd .. && \
     rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
 # Set library path environment variable
-ENV LD_LIBRARY_PATH=/usr/local/lib
-
-# Add TA-Lib to the linker configuration
-RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ta-lib.conf && ldconfig
+ENV LD_LIBRARY_PATH=/usr/lib
 
 # Define the working directory
 WORKDIR /app
