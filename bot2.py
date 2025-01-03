@@ -139,11 +139,10 @@ def calculate_indicators(prices):
     upper_band, middle_band, lower_band = talib.BBANDS(closes, timeperiod=20, nbdevup=2, nbdevdn=2, matype=0)
     rsi = talib.RSI(closes, timeperiod=14)[-1]
     slowk, slowd = talib.STOCH(highs, lows, closes, fastk_period=14, slowk_period=3, slowd_period=3)
-    # Supprimer les lignes suivantes
-    # adx = talib.ADX(highs, lows, closes, timeperiod=14)[-1]
-    # cci = talib.CCI(highs, lows, closes, timeperiod=14)[-1]
+    adx = talib.ADX(highs, lows, closes, timeperiod=14)[-1]
+    cci = talib.CCI(highs, lows, closes, timeperiod=14)[-1]
 
-    logger.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}")
+    logger.debug(f"Indicateurs calculés : SMA_short={sma_short}, SMA_long={sma_long}, EMA_short={ema_short}, EMA_long={ema_long}, MACD={macd[-1]}, ATR={atr}, Upper_Band={upper_band[-1]}, Lower_Band={lower_band[-1]}, RSI={rsi}, Stochastic_K={slowk[-1]}, Stochastic_D={slowd[-1]}, ADX={adx}, CCI={cci}")
     logger.debug("Fin du calcul des indicateurs.")
 
     return {
@@ -158,9 +157,8 @@ def calculate_indicators(prices):
         "RSI": rsi,
         "Stochastic_K": slowk[-1],
         "Stochastic_D": slowd[-1],
-        # Supprimer les lignes suivantes
-        # "ADX": adx,
-        # "CCI": cci
+        "ADX": adx,
+        "CCI": cci
     }
 
 def calculate_sl_tp(entry_price, signal_type, atr, multiplier=1.5):
@@ -183,13 +181,13 @@ def analyze_signals(prices):
     logger.debug("Début de l'analyse des signaux.")
     indicators = calculate_indicators(prices)
 
-    if indicators['RSI'] < 30 and indicators['Stochastic_K'] < 20 and indicators['EMA_short'] > indicators['EMA_long']:
+    if indicators['RSI'] < 30 and indicators['Stochastic_K'] < 20 and indicators['ADX'] > 20 and indicators['EMA_short'] > indicators['EMA_long']:
         decision = "Acheter"
-    elif indicators['RSI'] > 70 and indicators['Stochastic_K'] > 80 and indicators['EMA_short'] < indicators['EMA_long']:
+    elif indicators['RSI'] > 70 and indicators['Stochastic_K'] > 80 and indicators['ADX'] > 20 and indicators['EMA_short'] < indicators['EMA_long']:
         decision = "Vendre"
-    elif indicators['MACD'] > 0 and indicators['EMA_short'] > indicators['EMA_long']:
+    elif indicators['MACD'] > 0 and indicators['EMA_short'] > indicators['EMA_long'] and indicators['ADX'] > 20:
         decision = "Acheter"
-    elif indicators['MACD'] < 0 and indicators['EMA_short'] < indicators['EMA_long']:
+    elif indicators['MACD'] < 0 and indicators['EMA_short'] < indicators['EMA_long'] and indicators['ADX'] > 20:
         decision = "Vendre"
     else:
         decision = "Ne rien faire"
@@ -327,7 +325,6 @@ async def main():
     await asyncio.gather(
         trading_bot(),
         run_flask()
-        send_daily_summary(webhook_url)
     )
     logger.info("Fin de l'exécution principale.")
 
