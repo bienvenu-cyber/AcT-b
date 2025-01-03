@@ -1,19 +1,22 @@
-# Utiliser une image de base Python légère
+# Use a base Python image
 FROM python:3.11-slim
 
-# Installer les dépendances système nécessaires pour psycopg2 et TA-Lib
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Update apt-get and install necessary system dependencies
+RUN apt-get update && apt-get install -y \
     build-essential \
     wget \
-    gcc \
     libpq-dev \
     libtool \
     autoconf \
-    make \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    automake \
+    pkg-config \
+    libffi-dev \
+    python3-dev \
+    curl \
+    git && \
+    rm -rf /var/lib/apt/lists/*
 
-# Télécharger et installer TA-Lib à partir des sources
+# Download and install TA-Lib from source
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
@@ -23,23 +26,23 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     cd .. && \
     rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
-# Définir le répertoire de travail
+# Define the working directory
 WORKDIR /app
 
-# Copier les fichiers nécessaires dans l'image Docker
+# Copy requirements.txt and bot2.py into the Docker image
 COPY requirements.txt /app/requirements.txt
 COPY bot2.py /app/bot2.py
 
-# Mettre à jour pip et installer les dépendances Python
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Définir les variables d'environnement
+# Add environment variables
 ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W8f2Ews3xHkXY
 ENV PORT=8002
 
-# Exposer le port sur lequel l'application écoute
+# Upgrade pip and install Python dependencies
+RUN python -m pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Expose the port on which the application listens
 EXPOSE 8002
 
-# Commande de démarrage pour python
+# Command to start the application
 CMD ["python", "bot2.py"]
