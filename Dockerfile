@@ -55,8 +55,11 @@ ENV PORT=8002
 
 # Mettre à jour pip et installer les dépendances Python
 RUN python -m pip install --upgrade pip && \
-    pip install --no-cache-dir TA-Lib==0.4.0 && \
+    pip install --no-cache-dir TA-Lib && \
     pip install --no-cache-dir -r requirements.txt
+
+# Vérifier l'installation de TA-Lib
+RUN python -c "import talib; print(talib.get_functions())"
 
 # Exposer le port
 EXPOSE 8002
