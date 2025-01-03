@@ -7,16 +7,10 @@ RUN apt-get update && apt-get install -y \
     wget \
     libpq-dev \
     libtool \
-    autoconf \
-    automake \
-    pkg-config \
-    libffi-dev \
-    python3-dev \
-    curl \
-    git && \
+    autoconf && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install TA-Lib from source
+# Download and install TA-Lib
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
