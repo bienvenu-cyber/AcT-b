@@ -1,7 +1,7 @@
-# Use a base Python image
+# Utilisation de Python 3.11 basé sur Debian slim
 FROM python:3.11-slim
 
-# Update apt-get and install necessary system dependencies
+# Mettre à jour apt-get et installer les dépendances système
 RUN apt-get update && apt-get install -y \
     build-essential \
     wget \
@@ -13,10 +13,11 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     python3-dev \
     curl \
-    git && \
+    git \
+    libta-lib-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install TA-Lib from source
+# Télécharger et installer TA-Lib depuis les sources
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
@@ -26,32 +27,30 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     cd .. && \
     rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
-# Verify that the TA-Lib library is correctly installed
-RUN ls -l /usr/local/lib | grep ta_lib
+# Vérifier si TA-Lib est bien installé
+RUN ls -l /usr/local/lib | grep ta_lib || echo "TA-Lib not found"
 
-# Set library path environment variable
+# Configurer les bibliothèques partagées
 ENV LD_LIBRARY_PATH=/usr/local/lib
-
-# Add TA-Lib to the linker configuration
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ta-lib.conf && ldconfig
 
-# Define the working directory
+# Définir le dossier de travail
 WORKDIR /app
 
-# Copy requirements.txt and bot2.py into the Docker image
+# Copier les fichiers nécessaires
 COPY requirements.txt /app/requirements.txt
 COPY bot2.py /app/bot2.py
 
-# Add environment variables
+# Ajouter les variables d'environnement
 ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W8f2Ews3xHkXY
 ENV PORT=8002
 
-# Upgrade pip and install Python dependencies
+# Mettre à jour pip et installer les dépendances Python
 RUN python -m pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Expose the port on which the application listens
+# Exposer le port
 EXPOSE 8002
 
-# Command to start the application
+# Lancer l'application
 CMD ["python", "bot2.py"]
