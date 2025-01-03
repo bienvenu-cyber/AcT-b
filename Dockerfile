@@ -16,6 +16,16 @@ RUN apt-get update && apt-get install -y \
     git && \
     rm -rf /var/lib/apt/lists/*
 
+# Download and install TA-Lib from source
+RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
+    tar -xzvf ta-lib-0.4.0-src.tar.gz && \
+    cd ta-lib && \
+    ./configure --prefix=/usr && \
+    make && \
+    make install && \
+    cd .. && \
+    rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
+
 # Define the working directory
 WORKDIR /app
 
@@ -29,7 +39,6 @@ ENV PORT=8002
 
 # Install Python dependencies
 RUN python -m pip install --upgrade pip
-RUN pip install --no-cache-dir TA-Lib
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Expose the port on which the application listens
