@@ -7,7 +7,9 @@ RUN apt-get update && apt-get install -y \
     wget \
     libpq-dev \
     libtool \
-    autoconf && \
+    autoconf \
+    libta-lib0 \
+    libta-lib0-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Download and install TA-Lib
