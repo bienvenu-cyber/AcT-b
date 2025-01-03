@@ -35,6 +35,9 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
 # Vérifier si TA-Lib est bien installé
 RUN ls -l /usr/local/lib | grep libta_lib || echo "TA-Lib not found"
 
+# Copier la bibliothèque pour que pip puisse la trouver
+RUN cp /usr/local/lib/libta_lib.so* /usr/lib/
+
 # Ajouter TA-Lib aux bibliothèques système
 ENV LD_LIBRARY_PATH=/usr/local/lib
 RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ta-lib.conf && ldconfig
