@@ -1,28 +1,28 @@
 # Utilisation de Python 3.11 basé sur Debian
-FROM python:3.11
+FROM python:3.11-slim
 
-# Installer les dépendances système
+# Mettre à jour apt-get et installer les dépendances système nécessaires
 RUN apt-get update && apt-get install -y \
     build-essential \
     wget \
-    libpq-dev \
+    gcc \
+    g++ \
+    make \
     libtool \
     autoconf \
     automake \
     pkg-config \
+    libc6-dev \
+    libssl-dev \
+    libsqlite3-dev \
     libffi-dev \
     python3-dev \
     curl \
     git \
-    gcc \
-    make \
-    cmake \
-    libc6-dev \
-    libssl-dev \
-    libsqlite3-dev && \
+    libpq-dev && \
     rm -rf /var/lib/apt/lists/*
 
-# Télécharger et compiler TA-Lib
+# Télécharger et compiler TA-Lib depuis la source
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
@@ -32,15 +32,14 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     cd .. && \
     rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
 
-# Vérifier si TA-Lib est bien installé
-RUN ls /usr/local/lib/ | grep libta_lib || echo "TA-Lib not found"
+# Ajouter TA-Lib aux chemins d'installations du système
+ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
-# Copier la bibliothèque pour que pip puisse la trouver
-RUN cp /usr/local/lib/libta_lib.so* /usr/lib/
+# Recharger la configuration des bibliothèques
+RUN ldconfig
 
-# Ajouter TA-Lib aux bibliothèques système
-ENV LD_LIBRARY_PATH=/usr/local/lib
-RUN echo "/usr/local/lib" > /etc/ld.so.conf.d/ta-lib.conf && ldconfig
+# Vérifier que TA-Lib est installé correctement
+RUN python -c "import talib; print(talib.get_functions())"
 
 # Définir le dossier de travail
 WORKDIR /app
@@ -56,9 +55,6 @@ ENV PORT=8002
 # Mettre à jour pip et installer les dépendances Python
 RUN python -m pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
-
-# Vérifier que TA-Lib fonctionne
-RUN python -c "import talib; print(talib.get_functions())"
 
 # Exposer le port
 EXPOSE 8002
