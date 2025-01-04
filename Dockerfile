@@ -22,10 +22,11 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     curl \
     git \
-    libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
+    libpq-dev \
+    libta-lib0-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Télécharger et compiler TA-Lib depuis la source
+# Télécharger et compiler TA-Lib depuis la source (si nécessaire)
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
     tar -xzvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib && \
@@ -42,7 +43,7 @@ ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 RUN ldconfig
 
 # Installer TA-Lib Python via pip (le module Python pour interagir avec la bibliothèque native)
-RUN pip install TA-Lib
+RUN pip install --no-cache-dir TA-Lib
 
 # Définir le dossier de travail
 WORKDIR /app
