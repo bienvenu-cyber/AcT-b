@@ -6,6 +6,12 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     wget \
     curl \
+    pkg-config \
+    git \
+    libblas-dev \
+    liblapack-dev \
+    libhdf5-dev \
+    gfortran \
     && rm -rf /var/lib/apt/lists/*
 
 # Installation de TA-Lib
@@ -21,9 +27,15 @@ RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
 # Définir le répertoire de travail
 WORKDIR /app
 
+# Mettre à jour pip
+RUN pip install --no-cache-dir --upgrade pip
+
 # Copier les fichiers nécessaires dans l'image Docker
 COPY requirements.txt .
 COPY bot2.py .
+
+# Modifier le requirements.txt pour avoir une version valide de tensorflow
+RUN sed -i 's/tensorflow==2.18.0/tensorflow==2.15.0/' requirements.txt
 
 # Installer les dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
