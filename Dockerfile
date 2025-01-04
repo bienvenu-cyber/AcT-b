@@ -1,27 +1,22 @@
-# Utiliser une image de base Python légère
-FROM python:3.11-slim
+# Utiliser une image de base Python
+FROM python:3.10-slim
 
-# Installer les dépendances système nécessaires pour psycopg2 et TA-Lib
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Installer les dépendances système nécessaires
+RUN apt-get update && apt-get install -y \
     build-essential \
     wget \
-    gcc \
-    libpq-dev \
-    libtool \
-    autoconf \
-    make \
-    && apt-get clean \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Télécharger et installer TA-Lib à partir des sources
+# Installation de TA-Lib
 RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
-    tar -xzvf ta-lib-0.4.0-src.tar.gz && \
-    cd ta-lib && \
+    tar -xvzf ta-lib-0.4.0-src.tar.gz && \
+    cd ta-lib/ && \
     ./configure --prefix=/usr && \
     make && \
     make install && \
     cd .. && \
-    rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
+    rm -rf ta-lib-0.4.0-src.tar.gz ta-lib/
 
 # Définir le répertoire de travail
 WORKDIR /app
