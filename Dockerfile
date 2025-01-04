@@ -4,6 +4,9 @@ FROM python:3.11-slim
 # Mettre à jour pip dès le début
 RUN python -m pip install --upgrade pip
 
+# Mettre à jour les sources apt-get
+RUN apt-get update --allow-releaseinfo-change
+
 # Mettre à jour apt-get et installer les dépendances système nécessaires
 RUN apt-get update && apt-get install -y \
     build-essential \
