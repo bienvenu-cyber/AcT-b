@@ -17,16 +17,17 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Installation de TA-Lib
+# Installation de TA-Lib depuis les sources
 RUN cd /tmp && \
     wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
-    tar -xzf ta-lib-0.4.0-src.tar.gz && \
+    tar -xvf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib/ && \
     ./configure && \
     make && \
     make install && \
-    cd .. && \
-    rm -rf ta-lib-0.4.0-src.tar.gz ta-lib/ && \
+    rm -rf /tmp/ta-lib-0.4.0-src.tar.gz && \
+    rm -rf /tmp/ta-lib && \
+    ln -s /usr/local/lib/libta_lib.so.0 /usr/lib/libta_lib.so.0 && \
     ldconfig
 
 # Définir le répertoire de travail
@@ -39,14 +40,22 @@ RUN pip install --no-cache-dir --upgrade pip
 COPY requirements.txt .
 COPY bot2.py .
 
-# Modifier le requirements.txt
+# Modifier le requirements.txt pour adapter les versions
 RUN sed -i 's/tensorflow==2.18.0/tensorflow==2.15.0/' requirements.txt && \
-    sed -i 's/psycopg2==2.9.7/psycopg2-binary==2.9.7/' requirements.txt
+    sed -i 's/psycopg2==2.9.7/psycopg2-binary==2.9.7/' requirements.txt && \
+    sed -i '/TA-Lib/d' requirements.txt
 
-# Installer les dépendances Python
+# Installer TA-Lib et autres dépendances Python
 RUN pip install --no-cache-dir numpy && \
-    pip install --no-cache-dir TA-Lib && \
+    pip install --no-cache-dir TA-Lib==0.4.24 && \
     pip install --no-cache-dir -r requirements.txt
 
 # Ajouter les variables d'environnement
-ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W
+ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W8f2Ews3xHkXY
+ENV PORT=8002
+
+# Exposer le port
+EXPOSE 8002
+
+# Lancer l'application
+CMD ["python", "bot2.py"]
