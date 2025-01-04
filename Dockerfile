@@ -12,6 +12,9 @@ RUN apt-get update && apt-get install -y \
     liblapack-dev \
     libhdf5-dev \
     gfortran \
+    postgresql \
+    postgresql-contrib \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Installation de TA-Lib
@@ -34,8 +37,9 @@ RUN pip install --no-cache-dir --upgrade pip
 COPY requirements.txt .
 COPY bot2.py .
 
-# Modifier le requirements.txt pour avoir une version valide de tensorflow
-RUN sed -i 's/tensorflow==2.18.0/tensorflow==2.15.0/' requirements.txt
+# Modifier le requirements.txt pour avoir une version valide de tensorflow et utiliser psycopg2-binary
+RUN sed -i 's/tensorflow==2.18.0/tensorflow==2.15.0/' requirements.txt && \
+    sed -i 's/psycopg2==2.9.7/psycopg2-binary==2.9.7/' requirements.txt
 
 # Installer les dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
