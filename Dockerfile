@@ -18,14 +18,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Installation de TA-Lib
-RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
-    tar -xvzf ta-lib-0.4.0-src.tar.gz && \
+RUN cd /tmp && \
+    wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
+    tar -xzf ta-lib-0.4.0-src.tar.gz && \
     cd ta-lib/ && \
-    ./configure --prefix=/usr && \
+    ./configure && \
     make && \
     make install && \
     cd .. && \
-    rm -rf ta-lib-0.4.0-src.tar.gz ta-lib/
+    rm -rf ta-lib-0.4.0-src.tar.gz ta-lib/ && \
+    ldconfig
 
 # Définir le répertoire de travail
 WORKDIR /app
@@ -37,19 +39,14 @@ RUN pip install --no-cache-dir --upgrade pip
 COPY requirements.txt .
 COPY bot2.py .
 
-# Modifier le requirements.txt pour avoir une version valide de tensorflow et utiliser psycopg2-binary
+# Modifier le requirements.txt
 RUN sed -i 's/tensorflow==2.18.0/tensorflow==2.15.0/' requirements.txt && \
     sed -i 's/psycopg2==2.9.7/psycopg2-binary==2.9.7/' requirements.txt
 
 # Installer les dépendances Python
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir numpy && \
+    pip install --no-cache-dir TA-Lib && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Ajouter les variables d'environnement
-ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W8f2Ews3xHkXY
-ENV PORT=8002
-
-# Exposer le port
-EXPOSE 8002
-
-# Lancer l'application
-CMD ["python", "bot2.py"]
+ENV DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/1321239629084627004/ryXqQGg0oeIxoiAHh21FMhCrUGLo1BOynDHtR3A-mtptklpbocJmL_-W
