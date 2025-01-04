@@ -1,11 +1,11 @@
 # Utilisation de Python 3.11 basé sur Debian
 FROM python:3.11
 
-# Mettre à jour pip
-RUN python -m pip install --upgrade pip
+# Vérifier les sources avant modification
+RUN cat /etc/apt/sources.list
 
 # Mettre à jour les sources apt-get et forcer l'utilisation d'un miroir différent
-RUN sed -i 's/deb.debian.org/mirrors.kernel.org/' /etc/apt/sources.list
+RUN echo "deb http://mirrors.kernel.org/debian/ stable main" > /etc/apt/sources.list
 
 # Mettre à jour apt-get et installer les dépendances nécessaires
 RUN apt-get update && apt-get install -y \
@@ -27,25 +27,9 @@ RUN apt-get update && apt-get install -y \
     git \
     libpq-dev \
     libta-lib0-dev \
-    && rm -rf /var/lib/apt/lists/* || tail -n 20 /var/log/apt/history.log
+    && rm -rf /var/lib/apt/lists/*
 
-# Télécharger et installer TA-Lib depuis la source (si nécessaire)
-RUN wget http://prdownloads.sourceforge.net/ta-lib/ta-lib-0.4.0-src.tar.gz && \
-    tar -xzvf ta-lib-0.4.0-src.tar.gz && \
-    cd ta-lib && \
-    ./configure --prefix=/usr/local && \
-    make && \
-    make install && \
-    cd .. && \
-    rm -rf ta-lib-0.4.0-src.tar.gz ta-lib
-
-# Ajouter TA-Lib aux chemins d'installation du système
-ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-
-# Recharger la configuration des bibliothèques
-RUN ldconfig
-
-# Installer TA-Lib Python via pip
+# Installer TA-Lib Python via pip (le module Python pour interagir avec la bibliothèque native)
 RUN pip install --no-cache-dir TA-Lib
 
 # Définir le dossier de travail
