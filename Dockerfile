@@ -41,8 +41,8 @@ ENV LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 # Recharger la configuration des bibliothèques
 RUN ldconfig
 
-# Vérifier que TA-Lib est installé correctement
-RUN python -c "import talib; print(talib.get_functions())"
+# Installer TA-Lib Python via pip (le module Python pour interagir avec la bibliothèque native)
+RUN pip install TA-Lib
 
 # Définir le dossier de travail
 WORKDIR /app
